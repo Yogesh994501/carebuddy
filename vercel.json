@@ -1,8 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": "apps/web/dist",
+  "services": {
+    "api": {
+      "root": "apps/api",
+      "framework": "express"
+    },
+    "web": {
+      "root": "apps/web",
+      "framework": "vite"
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/worker",
@@ -11,8 +18,16 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api).*)",
-      "destination": "/index.html"
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
     }
   ]
 }

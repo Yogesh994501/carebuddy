@@ -46,7 +46,7 @@ export function App() {
     }
   ]);
 
-  const [appointments] = useState([
+  const [appointments, setAppointments] = useState([
     {
       id: 'apt-1',
       doctor: 'Dr. Sarah Connor',
@@ -124,6 +124,22 @@ export function App() {
     ]);
   };
 
+  const handleRescheduleAppointment = async (id: string, date: string, time: string) => {
+    setAppointments((prev) =>
+      prev.map((apt) => (apt.id === id ? { ...apt, localDate: date, localTime: time } : apt))
+    );
+    setActivity((prev) => [
+      {
+        id: `act-${Date.now()}`,
+        type: 'APPOINTMENT',
+        title: 'Appointment Rescheduled',
+        description: `Rescheduled to ${date} at ${time}`,
+        timestamp: new Date().toISOString()
+      },
+      ...prev
+    ]);
+  };
+
   const takenCount = doses.filter((d) => d.status === 'TAKEN').length;
   const adherenceRate = Math.round((takenCount / doses.length) * 100);
 
@@ -144,33 +160,30 @@ export function App() {
           <button
             type="button"
             onClick={() => setActiveTab('elderly')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'elderly'
-                ? 'bg-[#397B68] text-white shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'elderly'
+              ? 'bg-[#397B68] text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <UserCheck className="w-3.5 h-3.5" /> Elderly View
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('family')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'family'
-                ? 'bg-[#397B68] text-white shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'family'
+              ? 'bg-[#397B68] text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <Users className="w-3.5 h-3.5" /> Family View
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('caregiver')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'caregiver'
-                ? 'bg-[#397B68] text-white shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'caregiver'
+              ? 'bg-[#397B68] text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <Stethoscope className="w-3.5 h-3.5" /> Caregiver View
           </button>
@@ -226,6 +239,7 @@ export function App() {
               else await handleSkipDose(id, 'Administered by Caregiver');
             }}
             onCreateNote={handleCreateNote}
+            onRescheduleAppointment={handleRescheduleAppointment}
             isRealTimeConnected={isConnected}
           />
         )}

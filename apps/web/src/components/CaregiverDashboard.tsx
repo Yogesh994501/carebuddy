@@ -24,6 +24,7 @@ export interface CaregiverDashboardProps {
   }>;
   onRecordDose: (doseId: string, state: 'TAKEN' | 'SNOOZED' | 'SKIPPED', reason?: string) => Promise<void>;
   onCreateNote: (note: string, isFlagged: boolean) => Promise<void>;
+  onRescheduleAppointment?: (id: string, date: string, time: string) => Promise<void>;
   isRealTimeConnected?: boolean;
 }
 
@@ -33,6 +34,7 @@ export function CaregiverDashboard({
   appointments,
   onRecordDose,
   onCreateNote,
+  onRescheduleAppointment,
   isRealTimeConnected = true
 }: CaregiverDashboardProps) {
   const [newNote, setNewNote] = useState('');
@@ -222,6 +224,15 @@ export function CaregiverDashboard({
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-600">{apt.clinic} &bull; {apt.localDate}</p>
+                    {onRescheduleAppointment && (
+                      <button
+                        type="button"
+                        onClick={() => onRescheduleAppointment(apt.id, apt.localDate, apt.localTime)}
+                        className="text-[10px] text-[#397B68] font-semibold hover:underline"
+                      >
+                        Reschedule
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

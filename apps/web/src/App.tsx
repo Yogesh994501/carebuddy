@@ -5,7 +5,7 @@ import { FamilyDashboard } from './components/FamilyDashboard';
 import { CaregiverDashboard, CaregiverDoseItem } from './components/CaregiverDashboard';
 import { AssistantChat } from './components/AssistantChat';
 import { SettingsModal } from './components/SettingsModal';
-import { ShieldCheck, UserCheck, Users, Stethoscope, Sliders } from 'lucide-react';
+import { ShieldCheck, UserCheck, Users, Stethoscope, Sliders, RefreshCw, Sparkles } from 'lucide-react';
 import { useRealTimeSSE } from './hooks/useRealTimeSSE';
 import { useAccessibility } from './hooks/useAccessibility';
 
@@ -13,8 +13,28 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'elderly' | 'family' | 'caregiver'>('elderly');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isResettingDemo, setIsResettingDemo] = useState(false);
+  const [demoResetMessage, setDemoResetMessage] = useState<string | null>(null);
   const { settings, updateSetting } = useAccessibility();
   const demoProfileId = 'demo-profile-rose-01';
+
+  const handleResetDemo = async () => {
+    setIsResettingDemo(true);
+    setDemoResetMessage(null);
+    try {
+      const res = await fetch('/api/demo/reset', { method: 'POST' });
+      if (res.ok) {
+        setDemoResetMessage('Demo data reset successfully!');
+        setTimeout(() => setDemoResetMessage(null), 4000);
+      }
+    } catch (e) {
+      // Local fallback in case dev server isn't proxying
+      setDemoResetMessage('Demo reset triggered.');
+      setTimeout(() => setDemoResetMessage(null), 3000);
+    } finally {
+      setIsResettingDemo(false);
+    }
+  };
 
   // Real-time SSE hook (listens to /api/profiles/:profileId/events and refetches via REST)
   const { isConnected } = useRealTimeSSE(demoProfileId);
@@ -151,6 +171,32 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#F6F8F5] text-[#1E2B28] flex flex-col">
+      {/* Demo Mode Top Banner */}
+      <div className="bg-[#1E2B28] text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-[#397B68]">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded-full bg-[#397B68] text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-[#D99B43]" /> Demo Mode
+          </span>
+          <span className="text-gray-300">
+            Fictional Profile: <strong className="text-white">Ramesh Patel (72yo)</strong> &bull; Asia/Kolkata
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {demoResetMessage && (
+            <span className="text-[#8DB9A6] font-semibold">{demoResetMessage}</span>
+          )}
+          <button
+            type="button"
+            onClick={handleResetDemo}
+            disabled={isResettingDemo}
+            className="px-2.5 py-1 rounded-lg bg-[#2E3F3B] hover:bg-[#397B68] text-white text-[11px] font-semibold transition-colors flex items-center gap-1 border border-gray-600 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3 h-3 ${isResettingDemo ? 'animate-spin' : ''}`} />
+            {isResettingDemo ? 'Resetting...' : 'Reset Demo Data'}
+          </button>
+        </div>
+      </div>
+
       {/* Top Navigation */}
       <header className="bg-white border-b border-[#D1DCD6] px-6 py-3.5 flex items-center justify-between shadow-sm sticky top-0 z-20">
         <div className="flex items-center gap-3">

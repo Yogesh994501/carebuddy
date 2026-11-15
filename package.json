@@ -21,7 +21,10 @@
     "verify:stage6": "node scripts/verify-stage6.js",
     "verify:stage7": "node scripts/verify-stage7.js",
     "verify:stage8": "node scripts/verify-stage8.js",
+    "verify:stage9": "node scripts/verify-stage9.js",
+    "verify:all": "node scripts/verify-all.js",
     "verify:assistant": "node scripts/verify-assistant-mark.js",
+    "seed:demo": "node scripts/seed-demo.js",
     "prisma:generate": "npm --workspace=@carebuddy/api run prisma:generate",
     "prisma:migrate": "npm --workspace=@carebuddy/api run prisma:migrate",
     "test": "npm --workspace=@carebuddy/api run test"

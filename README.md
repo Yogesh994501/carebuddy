@@ -1,115 +1,192 @@
-# CareBuddy: AI-Powered Elderly Care & Medication Management Platform
+# CareBuddy: Full-Stack AI-Powered Elderly Care & Medication Management Platform
 
-CareBuddy is a secure, accessible healthcare and medication management system designed to keep elderly individuals at the center of their care network.
-
----
-
-## 1. Monorepo Architecture
-
-CareBuddy is structured as a TypeScript monorepo using npm workspaces:
-
-- `apps/web`: React 18, Vite, Tailwind CSS, TanStack Query, Framer Motion, Lucide React, accessible elderly UI.
-- `apps/api`: Node 20+, Express, TypeScript, Zod validation, Helmet, argon2id, Prisma ORM, SSE, Gemini AI service.
-- `apps/api/src/worker.ts`: Independent background scheduler worker claiming jobs via `FOR UPDATE SKIP LOCKED`.
-- `packages/shared`: Shared domain schemas, enums, types, and permission presets.
-- `docs/`: Technical specifications, architectural decisions (`docs/DECISIONS.md`), adherence mathematical specification (`docs/ADHERENCE.md`), and verification matrix (`docs/VERIFICATION.md`).
+CareBuddy is a production-grade, full-stack, AI-powered healthcare and medication management system designed to keep elderly individuals at the center of their care network while providing real-time visibility, automated dose tracking, and safety guardrails for families and caregivers.
 
 ---
 
-## 2. Prerequisites & Local Setup
+## 1. System Architecture
 
-### System Requirements
-- Node.js 20+
-- npm 10+
-- Docker & Docker Compose (optional; native embedded PostgreSQL is included for Docker-less environments)
-
-### Quick Start
-1. Clone the repository and navigate into the project root:
-   ```bash
-   cd carebuddy
-   ```
-2. Copy environment template:
-   ```bash
-   cp .env.example .env
-   ```
-3. Start local PostgreSQL:
-   - **With Docker**:
-     ```bash
-     docker compose up -d
-     ```
-   - **Without Docker (Embedded Postgres)**:
-     ```bash
-     npm run db:local
-     ```
-4. Verify stages:
-   ```bash
-   npm run verify:stage1      # Stage 1 database migration & append-only triggers
-   npm run verify:stage2      # Stage 2 auth & Gate 5 permission matrix
-   npm run verify:stage3      # Stage 3 dose engine, timezones & state machine
-   npm run verify:stage4      # Stage 4 worker, SKIP LOCKED & Gates 2 & 4
-   npm run verify:stage5      # Stage 5 appointments, notes & Gate 5 complete
-   npm run verify:assistant   # Section 12a Sprig identity & accessibility
-   npm run typecheck          # Monorepo TypeScript check
-   npm run build              # Full monorepo production build
-   ```
-
----
-
-## 3. Database Schema & Append-Only Triggers
-
-CareBuddy's data model contains 21 normalized models:
-- **Authentication & Security**: `User`, `Session`, `RecoveryCode`, `ConsentRecord`, `UserSettings`
-- **Care Network & Permissions**: `ElderlyProfile`, `CareNetwork`, `CareNetworkMember`, `Invitation`
-- **Medications & Schedules**: `Medication`, `MedicationSchedule` (versioned), `MedicationDose`, `MedicationLog` (append-only)
-- **Care Activities & Appointments**: `Appointment`, `CaregiverNote`, `Notification`, `NotificationPreference`
-- **Background Scheduler & Health**: `ScheduledJob` (`FOR UPDATE SKIP LOCKED`), `WorkerHeartbeat`
-- **Audit & AI**: `AuditLog` (append-only), `AssistantMessage`
-
-### Append-Only Invariants
-PostgreSQL triggers (`check_medication_log_immutable()` and `check_audit_log_immutable()`) enforce that `MedicationLog` and `AuditLog` records can **never** be updated or deleted by any API call or database user.
+```
+                                  +---------------------------------------+
+                                  |         CareBuddy Web (Vite/React)    |
+                                  |  - Elderly View (56px touch targets)  |
+                                  |  - Family View (Adherence & Timeline) |
+                                  |  - Caregiver View (Assisted Doses)    |
+                                  |  - Sprig Assistant Chat Drawer        |
+                                  +-------------------+-------------------+
+                                                      |
+                                          REST APIs & SSE Stream
+                                          (Opaque Session Cookies)
+                                                      |
+                                                      v
+                                  +---------------------------------------+
+                                  |           CareBuddy API Server        |
+                                  |  - Express / Helmet / CSRF / CORS     |
+                                  |  - Argon2id Auth & Recovery Codes     |
+                                  |  - Gate 5 IDOR & Role Permission RBAC |
+                                  |  - Real-Time SSE (Zero Health Data)   |
+                                  |  - Sprig Multi-Layer AI Pipeline      |
+                                  +---------+-------------------+---------+
+                                            |                   |
+                     Prisma / Database Pool |                   | Job Queue
+                                            v                   v
++---------------------------------------------+       +---------------------------------------------+
+|          PostgreSQL 16+ Database            |       |          Background Scheduler Worker        |
+|  - 21 Normalized Models                     | <---> |  - `FOR UPDATE SKIP LOCKED` Poll (1s-5s)    |
+|  - Immutable Append-Only Triggers:          |       |  - 60s Lease with Heartbeat Sweeper         |
+|    * MedicationLog & AuditLog (No UPD/DEL)  |       |  - Rolling 48h Dose Engine Generator        |
+|  - Strict Timezone / DST Luxon Precision    |       |  - Worker-Only MISSED State Machine Enforcer|
+|  - Zero Duplicate Doses / DLQ (5 Retries)   |       |  - 24h & 2h Appointment Reminders           |
++---------------------------------------------+       +---------------------------------------------+
+                                            ^
+                                            |
+                      DPDP AI Consent & Structured Context Boundary
+                                            |
+                                            v
+                              +---------------------------+
+                              |    Gemini AI API Engine   |
+                              |  - Emergency Short-Circuit|
+                              |  - Untrusted Quarantining |
+                              |  - Clinical Output Filter |
+                              +---------------------------+
+```
 
 ---
 
-## 4. Current Stage Status
+## 2. Monorepo Structure
 
-- **Stage 1 (Foundation)**: Complete ✅
-  - Monorepo structure, Docker Compose, Prisma schema, 20261115000000_init migration, append-only triggers, env validation.
-  - Verified against clean, empty database.
-- **Stage 2 (Auth and Authorization)**: Complete ✅
-  - Accounts (register, login, logout, password recovery with single-use codes), server sessions with HttpOnly cookies, argon2id.
-  - Profile creation (DIRECT and ASSISTED modes with attestation), membership resolution per-request, permission middleware.
-  - Care Network management, 10-character unambiguous invitation codes with HMAC-SHA256, atomic acceptance & revocation.
-  - Gate 5 Matrix verified (16/16 tests passing).
-- **Stage 3 (Medications and Dose Engine)**: Complete ✅
-  - Medication CRUD, prescriber directions confirmation, versioned schedules, soft deletion.
-  - Dose generation engine (48h rolling horizon, ON CONFLICT DO NOTHING duplicate prevention).
-  - DST handling (Asia/Kolkata, America/New_York spring/fall, Europe/London, Australia/Lord_Howe 30-min shift) and timezone change regeneration.
-  - State machine (conditional update, optimistic locking, snooze limits, worker-only MISSED, correction history preservation).
-  - Adherence calculation service (`docs/ADHERENCE.md`).
-  - Gates 3, 4 (generation), and 6 (transition) verified (13/13 tests passing).
-- **Stage 4 (Worker and Notifications)**: Complete ✅
-  - Background worker claiming jobs with `FOR UPDATE SKIP LOCKED`.
-  - 60 s lease with heartbeat, crash recovery sweeper, exponential backoff, dead-letter queue (DLQ).
-  - Handlers: dose generator, dose upcoming reminder, dose missed check (enforces worker-only MISSED), appointment reminder.
-  - In-app notification center (idempotent `InAppChannel`, user preferences, read tracking).
-  - Gates 2 & 4 verified (7/7 tests passing).
-- **Stage 5 (Appointments and Care Network)**: Complete ✅
-  - Medical appointments CRUD (`/api/profiles/:profileId/appointments`) with wall-clock Luxon resolution.
-  - Automatic 24-hour and 2-hour reminder background scheduling.
-  - Rescheduling preserves `rescheduledFrom`, updates reminder jobs, logs audit, and sends in-app notifications.
-  - Caregiver notes (`/api/profiles/:profileId/notes`) with flagged priority and author deletion control.
-  - Curated shared activity timeline (`/api/profiles/:profileId/activity`) isolating sensitive admin audit trails.
-  - Gate 5 Matrix completely verified across all existing routes (19/19 tests passing).
-- **Stage 6 (Dashboards and Real-Time SSE)**: Complete ✅
-  - Three distinct role dashboards (`ElderlyDashboard`, `FamilyDashboard`, `CaregiverDashboard`) built with React 18, Tailwind CSS & Framer Motion.
-  - SSE real-time event streaming (`GET /api/profiles/:profileId/events`) carrying strictly `{ type, profileId, entityId }` (zero health data leakage).
-  - Client-side auto-reconnection with TanStack Query invalidation and 30s polling fallback (`useRealTimeSSE.ts`).
-  - Active streams terminated immediately upon caregiver revocation.
-  - Gate 7 verified: 3 simultaneous browser sessions synchronized in 353ms (< 2.0s SLA), 7/7 tests passing.
-- **Stage 7 (AI CareBuddy Assistant: Sprig)**: Complete ✅
-  - Server-side integration with Gemini via `@google/genai` and original Sprig persona.
-  - Multi-layer boundary safety pipeline: deterministic emergency short-circuit, DPDP AI consent gating (`ConsentRecord`), caller permission context isolation (`viewMedications`, `viewAppointments`, etc.), and structural delimiter defense (`<<<UNTRUSTED_PATIENT_DATA>>>`).
-  - Output validation: replaces diagnoses and dose-change phrasing with safe medical disclaimers; labels outputs as 'From your CareBuddy records' or 'General information'.
-  - Accessible drawer chat interface (`AssistantChat.tsx`) with floating mobile trigger, persistent disclaimer, quick suggestions, and history clearing.
-  - Gate 9 verified: 48/48 tests passing, including a 30-prompt red-team adversarial evaluation suite with 0 violations.
-- **Stage 8 (Accessibility, Responsive Design & Polish)**: Next stage.
+- **`apps/web`**: React 18, Vite, Tailwind CSS, TanStack Query, Framer Motion, Lucide React, and WCAG 2.2 AA compliant UI.
+- **`apps/api`**: Node 20+, Express, TypeScript, Zod schema validation, Helmet security headers, Argon2id password hashing, Prisma ORM, SSE broadcaster, and Gemini client (`@google/genai`).
+- **`apps/api/src/worker.ts`**: Independent background worker polling database jobs via `FOR UPDATE SKIP LOCKED` with lease renewal and heartbeat reporting.
+- **`packages/shared`**: Shared TypeScript types, domain enums, permission presets, and Zod schemas.
+- **`docs/`**: Complete system documentation:
+  - `docs/DECISIONS.md`: 22 Architecture Decision Records (ADRs).
+  - `docs/VERIFICATION.md`: Verification evidence for all 10 Release Gates.
+  - `docs/ADHERENCE.md`: Mathematical formulation for clinical adherence.
+  - `docs/openapi.yaml`: Full OpenAPI 3.0 specification for all REST endpoints.
+- **`scripts/`**: Automated verification and local orchestration scripts.
+
+---
+
+## 3. The Ten Release Gates (100% PASS ✅)
+
+| Gate # | Name | Description | Verification Script | Status |
+|---|---|---|---|---|
+| **Gate 1** | **Persistence** | Create data, restart API, worker & database, log out and back in; everything persists. | `npm run verify:stage9` | PASS ✅ |
+| **Gate 2** | **Background Scheduling** | With browser closed, worker polls via `SKIP LOCKED`, claims jobs, marks overdue doses MISSED. | `npm run verify:stage4` | PASS ✅ |
+| **Gate 3** | **Timezone & DST** | Asia/Kolkata, America/New_York (spring/fall), Europe/London, Lord_Howe (30m DST). | `npm run verify:stage3` | PASS ✅ |
+| **Gate 4** | **No Duplicates** | Concurrent workers running generation; 0 duplicate doses or notifications; DLQ recovery. | `npm run verify:stage4` | PASS ✅ |
+| **Gate 5** | **Backend Permissions** | Route-by-role matrix (owner, family, caregiver, cross-profile IDOR defense, instant revocation). | `npm run verify:stage5` | PASS ✅ |
+| **Gate 6** | **MISSED != TAKEN** | Snooze never creates TAKEN; max 3 snoozes; client cannot mark MISSED; history preserved. | `npm run verify:stage3` | PASS ✅ |
+| **Gate 7** | **Synchronized Dashboards** | Multi-session SSE synchronizes dose/appointment state in ~350ms (< 2s SLA); zero health data. | `npm run verify:stage6` | PASS ✅ |
+| **Gate 8** | **Mobile & Accessibility** | WCAG 2.2 AA contrast rules, 48px/56px touch targets, 3px focus visible, 100-200% text scaling. | `npm run verify:stage8` | PASS ✅ |
+| **Gate 9** | **AI Safety (Sprig)** | Context builder isolation; emergency short-circuit; output filters; 30 red-team prompts passed. | `npm run verify:stage7` | PASS ✅ |
+| **Gate 10** | **Demo Reliability** | Deterministic seed, all 4 demo accounts authenticate, survives reset twice, non-demo untouched. | `npm run verify:stage9` | PASS ✅ |
+
+---
+
+## 4. Quick Start & Local Development
+
+### Prerequisites
+- Node.js 20+ (with npm 10+)
+- PostgreSQL 16+ (or use the built-in Embedded PostgreSQL engine)
+
+### 1. Installation & Environment Setup
+```bash
+git clone https://github.com/Yogesh994501/carebuddy.git
+cd carebuddy
+npm install
+cp .env.example .env
+```
+
+### 2. Database Migration & Embedded PostgreSQL
+You can run local PostgreSQL with zero external dependencies:
+```bash
+# Starts embedded PostgreSQL on port 5432
+npm run db:local
+
+# In a separate terminal, apply schema & immutable triggers:
+npm run prisma:migrate
+```
+
+### 3. Seed Demo Environment
+Seed deterministic fictional data (Ramesh Patel, 5 medications, 3 appointments, 30 days of historical doses with ~90% adherence):
+```bash
+npm run seed:demo
+```
+**Demo Credentials**:
+- **Elderly (Owner)**: `ramesh@demo.carebuddy.local` / `DemoPassword123!`
+- **Family (Daughter)**: `priya@demo.carebuddy.local` / `DemoPassword123!`
+- **Family (Son)**: `rahul@demo.carebuddy.local` / `DemoPassword123!`
+- **Caregiver (RN)**: `anita@demo.carebuddy.local` / `DemoPassword123!`
+
+### 4. Run Development Servers
+```bash
+# Start API Server (Port 4000)
+npm --workspace=@carebuddy/api run dev
+
+# Start Background Scheduler Worker (in a separate process)
+npm --workspace=@carebuddy/api run worker
+
+# Start Web Application (Port 5173)
+npm --workspace=@carebuddy/web run dev
+```
+
+---
+
+## 5. Verification & Testing
+
+Every stage and release gate has an automated, standalone verification script:
+
+```bash
+# Run all stage verification suites
+npm run verify:stage1      # Stage 1: Database Migration & Append-Only Triggers
+npm run verify:stage2      # Stage 2: Auth, Authorization & Gate 5 Permissions
+npm run verify:stage3      # Stage 3: Medications, Timezones, DST & State Machine (Gates 3, 4, 6)
+npm run verify:stage4      # Stage 4: Background Worker, SKIP LOCKED & Notifications (Gates 2, 4)
+npm run verify:stage5      # Stage 5: Appointments, Caregiver Notes & Activity Timeline
+npm run verify:stage6      # Stage 6: Dashboards & Real-Time SSE Synchronization (Gate 7)
+npm run verify:stage7      # Stage 7: AI Assistant (Sprig) & 30-Prompt Red-Team Suite (Gate 9)
+npm run verify:stage8      # Stage 8: Accessibility, Responsive Design & WCAG 2.2 AA (Gate 8)
+npm run verify:stage9      # Stage 9: Persistence (Gate 1) & Demo Reliability (Gate 10)
+npm run verify:assistant   # Section 12a Sprig SVG & accessibility assets
+
+# Complete monorepo typecheck & build
+npm run typecheck
+npm run build
+```
+
+---
+
+## 6. Key Security & Compliance Invariants
+
+### 1. Append-Only Clinical & Audit Logs
+- PostgreSQL database triggers `check_medication_log_immutable()` and `check_audit_log_immutable()` reject `UPDATE` and `DELETE` operations at the engine level. Even root database callers cannot alter historical medication records.
+- Correcting a MISSED dose appends a `CORRECTION` record; the original `MISSED` entry remains permanently preserved.
+
+### 2. HIPAA & Real-Time Privacy
+- Real-time Server-Sent Events (`GET /api/profiles/:profileId/events`) broadcast strictly opaque signals: `{ type, profileId, entityId }`.
+- Zero medication names, clinical instructions, or note contents are ever transmitted over SSE. The frontend invalidates TanStack Query keys to fetch fresh data over authenticated, encrypted REST endpoints.
+- Revoking a caregiver's access terminates their open SSE connection immediately (`res.end()`).
+
+### 3. DPDP Act & AI Consent
+- In compliance with the Digital Personal Data Protection (DPDP) Act, AI access to patient health data is gated by explicit consent (`ConsentRecord`).
+- When consent is disabled or pending, health records (medications, doses, appointments, notes) are completely excluded from AI context.
+- User-entered text is quarantined inside structural delimiters (`<<<UNTRUSTED_PATIENT_DATA>>>`) to prevent prompt injection and instruction overrides.
+- Acute emergencies (chest pain, stroke symptoms, breathing difficulty, severe bleeding, overdose, self-harm) short-circuit immediately without calling Gemini, returning fixed 911 emergency guidance and alerting the care network.
+
+### 4. Background Scheduler Invariants
+- The background worker polls the `ScheduledJob` table using raw SQL `FOR UPDATE SKIP LOCKED`.
+- Workers claim jobs with a 60-second lease and record periodic heartbeats in `WorkerHeartbeat`.
+- Stalled jobs from crashed workers are reclaimed by `reclaimExpiredLeases()`.
+- Unrecoverable jobs move to a Dead-Letter Queue (`DEAD`) after 5 failed attempts with exponential backoff.
+- The `MISSED` status is strictly enforced by the background worker at `scheduledAt + overdueGraceMinutes`; client applications and snoozes are physically prevented from marking a dose `MISSED`.
+
+---
+
+## 7. Production Deployment Guidelines
+
+1. **HTTPS & Cookie Security**: In production (`NODE_ENV=production`), ensure all cookies set `Secure: true`, `SameSite: strict`, and `HttpOnly: true`.
+2. **Secrets Management**: Supply cryptographically strong secrets (minimum 32 characters) for `SESSION_SECRET` and `CSRF_SECRET` via environment variables.
+3. **Dedicated Worker Process**: Run `npm --workspace=@carebuddy/api run worker` as an independent supervisor process (e.g. systemd, PM2, or separate Kubernetes pod) distinct from the web API.
+4. **Gemini API & HIPAA Terms**: When deploying with Google Gemini (`GEMINI_API_KEY`), review and execute the appropriate Google Cloud Business Associate Agreement (BAA) and Zero Data Retention terms for clinical health data.

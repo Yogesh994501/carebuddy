@@ -1,0 +1,310 @@
+openapi: 3.0.3
+info:
+  title: CareBuddy REST API
+  description: Full-stack, AI-powered elderly care and medication management platform API.
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000/api
+    description: Local Development Server
+
+paths:
+  /health:
+    get:
+      summary: API health and worker heartbeat status
+      responses:
+        '200':
+          description: API is healthy
+
+  /auth/register:
+    post:
+      summary: User registration with Argon2id password hashing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 10 }
+                name: { type: string }
+      responses:
+        '201':
+          description: Registration successful, returns 8 single-use recovery codes
+        '400':
+          description: Validation error or email already in use
+
+  /auth/login:
+    post:
+      summary: User login, sets HttpOnly session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid email or password
+
+  /auth/logout:
+    post:
+      summary: User logout, invalidates server session and clears cookie
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /auth/recover:
+    post:
+      summary: Account recovery via single-use recovery code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, recoveryCode, newPassword]
+              properties:
+                email: { type: string }
+                recoveryCode: { type: string }
+                newPassword: { type: string, minLength: 10 }
+      responses:
+        '200':
+          description: Password reset successfully, all previous sessions invalidated
+        '400':
+          description: Invalid or previously consumed recovery code
+
+  /profiles:
+    get:
+      summary: List all elderly profiles associated with caller
+      responses:
+        '200':
+          description: List of profiles
+    post:
+      summary: Create a new elderly profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                preferredName: { type: string }
+                dateOfBirth: { type: string, format: date }
+                bloodGroup: { type: string }
+                allergies: { type: string }
+                emergencyNotes: { type: string }
+                timezone: { type: string, default: "Asia/Kolkata" }
+                reminderLeadMinutes: { type: integer, default: 15 }
+                overdueGraceMinutes: { type: integer, default: 60 }
+      responses:
+        '201':
+          description: Profile created successfully
+
+  /profiles/{profileId}:
+    get:
+      summary: Get details of an elderly profile
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Profile details
+        '404':
+          description: Profile not found or caller lacks access (IDOR defense)
+    patch:
+      summary: Update profile settings (Owner only)
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Profile updated
+        '403':
+          description: Owner permissions required
+
+  /profiles/{profileId}/network/members:
+    get:
+      summary: List care network members
+      responses:
+        '200':
+          description: Network members list
+    post:
+      summary: Create an invitation for a family member or caregiver (Owner only)
+      responses:
+        '201':
+          description: Invitation created with 10-char unambiguous code
+
+  /invitations/accept:
+    post:
+      summary: Accept care network invitation using code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: Invitation accepted, member added to care network
+        '400':
+          description: Invalid, expired, or locked invitation code
+
+  /profiles/{profileId}/medications:
+    get:
+      summary: List active and paused medications for profile
+      responses:
+        '200':
+          description: List of medications with schedules
+    post:
+      summary: Add a new medication and configure schedule
+      responses:
+        '201':
+          description: Medication added and doses generated for rolling 48h horizon
+
+  /profiles/{profileId}/doses/today:
+    get:
+      summary: Get today's scheduled doses for profile
+      responses:
+        '200':
+          description: Doses for current wall-clock date in patient timezone
+
+  /profiles/{profileId}/doses/{doseId}/take:
+    post:
+      summary: Record dose as TAKEN
+      responses:
+        '200':
+          description: Dose marked TAKEN, immutable log recorded
+        '409':
+          description: Optimistic lock failure or invalid status transition
+
+  /profiles/{profileId}/doses/{doseId}/snooze:
+    post:
+      summary: Snooze dose reminder (max 3 times, never sets TAKEN or changes scheduledAt)
+      responses:
+        '200':
+          description: Dose snoozed
+
+  /profiles/{profileId}/doses/{doseId}/skip:
+    post:
+      summary: Record dose as SKIPPED with clinical reason
+      responses:
+        '200':
+          description: Dose marked SKIPPED with reason
+
+  /profiles/{profileId}/adherence:
+    get:
+      summary: Calculate clinical adherence rate over 7, 14, or 30 days
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Adherence statistics (rate, taken, skipped, missed, unconfirmed excluded)
+
+  /profiles/{profileId}/appointments:
+    get:
+      summary: List upcoming and past appointments
+      responses:
+        '200':
+          description: Appointment list
+    post:
+      summary: Create new appointment (enqueues 24h & 2h reminder jobs)
+      responses:
+        '201':
+          description: Appointment created
+
+  /profiles/{profileId}/appointments/{appointmentId}/reschedule:
+    post:
+      summary: Reschedule appointment, records rescheduledFrom and updates reminder jobs
+      responses:
+        '200':
+          description: Appointment rescheduled
+
+  /profiles/{profileId}/notes:
+    get:
+      summary: List caregiver and clinical notes
+      responses:
+        '200':
+          description: Notes list
+    post:
+      summary: Create caregiver note (Caregivers and Owners with addNotes)
+      responses:
+        '201':
+          description: Note created
+
+  /profiles/{profileId}/activity:
+    get:
+      summary: Shared clinical activity timeline (scrubbed of IP/tech info)
+      responses:
+        '200':
+          description: Chronological care activities
+
+  /profiles/{profileId}/events:
+    get:
+      summary: Real-time Server-Sent Events stream (zero health data payload)
+      responses:
+        '200':
+          description: text/event-stream connection carrying { type, profileId, entityId }
+
+  /profiles/{profileId}/assistant/chat:
+    post:
+      summary: Chat with AI CareBuddy Assistant (Sprig)
+      description: Gated by DPDP consent, acute emergency short-circuit, and output filters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string }
+      responses:
+        '200':
+          description: Sprig response with source attribution
+        '403':
+          description: Assistant consent not granted
+
+  /profiles/{profileId}/assistant/consent:
+    put:
+      summary: Update assistant AI consent (Owner only)
+      responses:
+        '200':
+          description: Consent updated and logged
+
+  /settings:
+    get:
+      summary: Get user accessibility and display preferences
+      responses:
+        '200':
+          description: User settings
+    patch:
+      summary: Update accessibility preferences (elderlyMode, textScale, highContrast, reduceMotion)
+      responses:
+        '200':
+          description: Settings updated
+
+  /demo/reset:
+    post:
+      summary: Reset demo data idempotently (strictly touches isDemo profiles only)
+      responses:
+        '200':
+          description: Demo environment refreshed

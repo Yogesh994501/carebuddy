@@ -117,6 +117,20 @@ This log records architectural, security, and infrastructure decisions made duri
   5. **Responsive Layouts**: Designed fluid mobile-first flex and grid containers (`grid-cols-1 md:grid-cols-3`) without horizontal scrolling or dense `<table>` elements across 375px, 768px, and 1280px viewports.
 - **Rationale**: Accommodates natural visual, cognitive, and motor changes associated with healthy aging without compromising design aesthetic or performance.
 
+### DECISION-021: Demo Environment Lifecycle & Strict Non-Demo Isolation
+- **Context**: Section 14, 15, and 16 (Gate 10) mandate a deterministic 1-command demo setup (`seed:demo`), an administrative reset endpoint (`POST /api/demo/reset`), realistic 30-day clinical adherence data, and an absolute invariant that non-demo accounts and records are never touched during demo operations.
+- **Decision**:
+  1. Marked demo profiles explicitly with `isDemo: true` and reserved deterministic demo emails (`*@demo.carebuddy.local`).
+  2. Implemented `clearDemoData()` which executes targeted deletions matching `isDemo: true` profiles and designated demo user IDs. Non-demo users and profiles are completely omitted from deletion queries.
+  3. During administrative resets, database triggers on `MedicationLog` and `AuditLog` are temporarily suspended (`DISABLE TRIGGER ALL`) strictly within the clearing block and re-enabled immediately (`ENABLE TRIGGER ALL`) inside a `finally` block, ensuring transactional integrity and allowing clean resets without violating runtime immutability constraints.
+- **Rationale**: Enables zero-configuration testing, sales demonstrations, and CI evaluation while guaranteeing production data isolation and safety.
+
+### DECISION-022: Gate 1 End-to-End Restart & Persistence Verification
+- **Context**: Gate 1 requires verifying that user accounts, custom clinical profile configurations, medications, schedules, doses, appointments, caregiver notes, and immutable audit trails persist accurately through complete database restarts and process recycles.
+- **Decision**: Developed `apps/api/src/tests/gate1_persistence.test.ts` to execute a full lifecycle persistence test: populates complex relational patient data, disconnects Prisma, recycles connections, restarts Prisma client, and asserts that 100% of data attributes match expectations with argon2 password verification.
+- **Rationale**: Provides empirical automated proof that the system operates strictly against persistent PostgreSQL storage rather than ephemeral in-memory state.
+
+
 
 
 

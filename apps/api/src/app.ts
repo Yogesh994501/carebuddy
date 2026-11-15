@@ -19,6 +19,7 @@ import activityRoutes from './routes/activity';
 import eventRoutes from './routes/events';
 import assistantRoutes from './routes/assistant';
 import settingsRoutes from './routes/settings';
+import demoRoutes from './routes/demo';
 
 const app = express();
 
@@ -103,6 +104,7 @@ app.use('/api/profiles/:profileId/events', eventRoutes);
 app.use('/api/profiles/:profileId/assistant', assistantRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/demo', demoRoutes);
 
 // Catch-all 404 for unknown API routes
 app.use('/api/*', (req: Request, res: Response) => {

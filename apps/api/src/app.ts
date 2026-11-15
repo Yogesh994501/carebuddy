@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
+import path from 'path';
+import fs from 'fs';
 import { env } from './config/env';
 import { prisma } from './db/prisma';
 import { sessionMiddleware } from './middleware/auth';
@@ -33,7 +35,7 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
-        connectSrc: ["'self'", env.WEB_ORIGIN],
+        connectSrc: env.WEB_ORIGIN !== '*' ? ["'self'", env.WEB_ORIGIN] : ["'self'", '*'],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: env.NODE_ENV === 'production' ? [] : null
@@ -42,6 +44,23 @@ app.use(
     crossOriginEmbedderPolicy: false
   })
 );
+
+// Enable CORS
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    if (env.WEB_ORIGIN === '*' || origin === env.WEB_ORIGIN) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CareBuddy-Request, X-Requested-With');
+    }
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.use(express.json());
 
@@ -112,6 +131,15 @@ app.use('/api/cron', cronRoutes);
 app.use('/api/*', (req: Request, res: Response) => {
   return sendError(res, 404, 'NOT_FOUND', `Route ${req.method} ${req.originalUrl} not found.`);
 });
+
+// Serve frontend static build if present (e.g. single-service deployment)
+const webDistPath = path.resolve(__dirname, '../../web/dist');
+if (fs.existsSync(webDistPath)) {
+  app.use(express.static(webDistPath));
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(path.join(webDistPath, 'index.html'));
+  });
+}
 
 // Global error handler (never leaks stack traces in responses - Section 11)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

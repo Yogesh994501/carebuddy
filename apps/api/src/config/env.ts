@@ -14,6 +14,8 @@ const envSchema = z.object({
   TEST_DATABASE_URL: z.string().optional(),
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
   INVITATION_PEPPER: z.string().min(16, 'INVITATION_PEPPER must be at least 16 characters'),
+  CSRF_SECRET: z.string().optional(),
+  RUN_EMBEDDED_WORKER: z.coerce.boolean().default(true),
   GEMINI_API_KEY: z.string().optional().default(''),
   GEMINI_MODEL: z.string().default('gemini-1.5-flash'),
   DEMO_MODE: z.coerce.boolean().default(true),

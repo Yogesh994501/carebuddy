@@ -11,6 +11,8 @@
     "dev:web": "npm --workspace=@carebuddy/web run dev",
     "worker": "npm --workspace=@carebuddy/api run worker",
     "build": "npm --workspace=@carebuddy/api run build && npm --workspace=@carebuddy/web run build",
+    "start": "node apps/api/dist/index.js",
+    "render-build": "npm --workspace=@carebuddy/api run prisma:generate && npm run build",
     "typecheck": "npx --workspace=@carebuddy/shared tsc --noEmit && npx --workspace=@carebuddy/api tsc --noEmit && npx --workspace=@carebuddy/web tsc --noEmit",
     "db:local": "node scripts/run-pg.js",
     "verify:stage1": "node scripts/verify-migration.js",

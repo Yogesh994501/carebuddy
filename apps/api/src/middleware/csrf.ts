@@ -18,7 +18,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   const customHeader = req.headers['x-carebuddy-request'] || req.headers['x-requested-with'];
 
   // Origin check
-  if (origin) {
+  if (origin && env.WEB_ORIGIN !== '*') {
     try {
       const originUrl = new URL(origin);
       const expectedUrl = new URL(env.WEB_ORIGIN);

@@ -31,11 +31,11 @@ export function SettingsModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
     >
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-[#D1DCD6] space-y-6">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-[#D1DCD6] max-h-[90vh] flex flex-col">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+        <div className="flex items-center justify-between border-b border-gray-200 pb-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-[#E7F0EC] text-[#397B68]">
               <Sliders className="w-6 h-6" />
@@ -59,7 +59,7 @@ export function SettingsModal({
         </div>
 
         {/* Settings Form Controls */}
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto flex-1 py-4 pr-1">
           {/* 1. Text Size Scaling (100% to 200%) */}
           <div className="space-y-2">
             <label className="text-sm font-bold text-[#1E2B28] flex items-center gap-2">
@@ -152,7 +152,7 @@ export function SettingsModal({
         </div>
 
         {/* Done Button */}
-        <div className="pt-2">
+        <div className="pt-4 border-t border-gray-100 shrink-0">
           <button
             type="button"
             onClick={onClose}

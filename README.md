@@ -1,6 +1,29 @@
 # CareBuddy: Full-Stack AI-Powered Elderly Care & Medication Management Platform
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-carebuddy--kza6.onrender.com-brightgreen)](https://carebuddy-kza6.onrender.com)
+[![Status](https://img.shields.io/badge/Release%20Gates-10%2F10%20PASS-success)](docs/VERIFICATION.md)
+
 CareBuddy is a production-grade, full-stack, AI-powered healthcare and medication management system designed to keep elderly individuals at the center of their care network while providing real-time visibility, automated dose tracking, and safety guardrails for families and caregivers.
+
+---
+
+## 🌐 Live Production Deployment
+
+- **Live Application**: [https://carebuddy-kza6.onrender.com](https://carebuddy-kza6.onrender.com)
+- **API Health Check**: [https://carebuddy-kza6.onrender.com/health](https://carebuddy-kza6.onrender.com/health)
+- **Database**: Cloud Neon Serverless PostgreSQL (`ap-southeast-1`)
+
+### 👥 Interactive Demo Accounts
+All accounts are pre-seeded with clinical records, schedules, and historical adherence:
+
+| Role | Name | Email | Password |
+|---|---|---|---|
+| **Elderly (Owner)** | Ramesh Patel (72yo) | `ramesh.patel@carebuddy.local` | `DemoPassword123!` |
+| **Family Caregiver** | Priya Patel (Daughter) | `priya.patel@carebuddy.local` | `DemoPassword123!` |
+| **Caregiver Nurse** | Anita Sharma (RN) | `anita.sharma@carebuddy.local` | `DemoPassword123!` |
+
+*Clicking "Reset Demo" from the web interface restores all 30 days of adherence history and appointments deterministically.*
 
 ---
 

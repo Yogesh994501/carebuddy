@@ -25,6 +25,7 @@
     "verify:all": "node scripts/verify-all.js",
     "verify:assistant": "node scripts/verify-assistant-mark.js",
     "seed:demo": "node scripts/seed-demo.js",
+    "vercel-build": "npm --workspace=@carebuddy/api run prisma:generate && npm run build",
     "prisma:generate": "npm --workspace=@carebuddy/api run prisma:generate",
     "prisma:migrate": "npm --workspace=@carebuddy/api run prisma:migrate",
     "test": "npm --workspace=@carebuddy/api run test"

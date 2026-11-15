@@ -85,4 +85,10 @@ PostgreSQL triggers (`check_medication_log_immutable()` and `check_audit_log_imm
   - State machine (conditional update, optimistic locking, snooze limits, worker-only MISSED, correction history preservation).
   - Adherence calculation service (`docs/ADHERENCE.md`).
   - Gates 3, 4 (generation), and 6 (transition) verified (13/13 tests passing).
-- **Stage 4 (Worker and Notifications)**: Next stage.
+- **Stage 4 (Worker and Notifications)**: Complete ✅
+  - Background worker claiming jobs with `FOR UPDATE SKIP LOCKED`.
+  - 60 s lease with heartbeat, crash recovery sweeper, exponential backoff, dead-letter queue (DLQ).
+  - Handlers: dose generator, dose upcoming reminder, dose missed check (enforces worker-only MISSED), appointment reminder.
+  - In-app notification center (idempotent `InAppChannel`, user preferences, read tracking).
+  - Gates 2 & 4 verified (7/7 tests passing).
+- **Stage 5 (Appointments and Care Network)**: Next stage.

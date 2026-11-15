@@ -201,7 +201,7 @@ export async function transitionDose(input: TransitionDoseInput): Promise<Transi
     await tx.auditLog.create({
       data: {
         profileId: currentDose.profileId,
-        userId: actorUserId,
+        userId: (actionSource === 'SYSTEM_WORKER' || actorUserId === 'system-worker') ? null : actorUserId,
         action: isCorrection ? 'DOSE_CORRECTION' : `DOSE_${targetState}`,
         entityType: 'MedicationDose',
         entityId: doseId,

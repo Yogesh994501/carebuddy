@@ -7,9 +7,9 @@ This document tracks the automated verification and status of the ten release ga
 | Gate # | Name | Description | Command | Status | Evidence Summary |
 |---|---|---|---|---|---|
 | **Gate 1** | Persistence | Create data, restart API, worker & database, log out and back in; everything persists. | `npm run test:gate1` | PENDING | To be verified in Stage 9 |
-| **Gate 2** | Background scheduling | With browser closed, advance clock; doses generated, reminders created, overdue become MISSED. | `npm run test:gate2` | PENDING | To be verified in Stage 4 |
+| **Gate 2** | Background scheduling | With browser closed, advance clock; doses generated, reminders created, overdue become MISSED. | `npm run verify:stage4` | PASS ✅ | With browser closed, worker polls independently via SKIP LOCKED, claims DOSE_UPCOMING, queues in-app reminders, detects overdue dose, marks MISSED at grace deadline via SYSTEM_WORKER, writes immutable MedicationLog, and queues alert. |
 | **Gate 3** | Timezone & DST | Asia/Kolkata (no DST), America/New_York (spring/fall), Europe/London, Lord_Howe (30m shift). | `npm run verify:stage3` | PASS ✅ | 6/6 tests passed. Zero dropped or doubled doses on transition days; spring-forward moves to 03:00; fall-back uses first occurrence; regeneration on timezone change verified. |
-| **Gate 4** | No duplicates | Concurrent workers, crash mid-job replay; 0 duplicate doses or notifications, lease recovery. | `npm run verify:stage3` | PASS (Generation Half) ✅ | 2 concurrent workers running generation produced 0 duplicate doses; job replay after crash inserted 0 new records. |
+| **Gate 4** | No duplicates | Concurrent workers, crash mid-job replay; 0 duplicate doses or notifications, lease recovery. | `npm run verify:stage4` | PASS ✅ | Full verification: 3 concurrent workers claiming 30 jobs via SKIP LOCKED produced 0 duplicate claims; worker crash mid-job lease expiry recovered by sweeper and completed; DLQ moved failing jobs to DEAD after 5 attempts. |
 | **Gate 5** | Backend permissions | Route-by-role matrix (owner, family, caregiver, cross-profile, revoked, anon) + instant revocation. | `npm run verify:stage2` | PASS (Stage 2 routes) | 16/16 tests passed. Anonymous rejected (401), cross-profile returns 404 (no existence leak), owner-only operations enforced (403), revoked member blocked immediately (404). |
 | **Gate 6** | MISSED != TAKEN | Reminder opening/snooze != TAKEN; MISSED only by worker; adherence excludes unconfirmed; audit retained. | `npm run verify:stage3` | PASS (Transition Half) ✅ | Snooze never creates TAKEN; max 3 snoozes enforced; client cannot set MISSED; correcting MISSED preserves history; adherence excludes pending/snoozed within grace. |
 | **Gate 7** | Synchronized dashboards | Playwright 3 sessions (owner, family, caregiver): dose/appointment change syncs <= 2s without reload. | `npm run test:gate7` | PENDING | To be verified in Stage 6 |
@@ -62,3 +62,19 @@ This document tracks the automated verification and status of the ten release ga
     - Client apps cannot mark MISSED (restricted to SYSTEM_WORKER).
     - Correcting MISSED preserves historical MISSED record in MedicationLog and appends CORRECTION.
     - Adherence calculation excludes pending and snoozed doses inside their grace period.
+
+### Stage 4 Acceptance: Worker and Notifications (Gates 2 & 4)
+- **Target**: Background worker claiming jobs with `FOR UPDATE SKIP LOCKED`, 60 s lease with heartbeat, exponential backoff, dead-letter; handlers for dose generator, upcoming reminder, missed check, appointment reminder; in-app notification center.
+- **Verification Command**: `npm run verify:stage4`
+- **Result**: PASS ✅ (7/7 tests passing)
+- **Test Evidence**:
+  - `src/tests/gate2_background_scheduling.test.ts`:
+    - Enqueues `DOSE_UPCOMING` and `DOSE_MISSED_CHECK` background jobs for pending doses.
+    - Background worker executes poll cycle with browser closed; claims `DOSE_UPCOMING` and generates in-app notifications for both owner and caregiver.
+    - Grace deadline passes: worker claims `DOSE_MISSED_CHECK`, transitions dose to `MISSED` via `SYSTEM_WORKER`, appends immutable `MedicationLog`, and delivers in-app alert notification.
+    - Strictly forbids client apps or snoozing from transitioning to `MISSED` (Section 5.2 & Gate 6).
+  - `src/tests/gate4_worker_concurrency.test.ts`:
+    - 3 simulated concurrent worker instances claiming 30 jobs via `FOR UPDATE SKIP LOCKED` simultaneously: exactly 30 unique job IDs claimed, 0 duplicate claims across all workers.
+    - Crash mid-job simulation: worker holding 60s lease crashes, lease expires, recovery sweeper reclaims job to `QUEUED`, healthy worker claims and completes the job (`SUCCEEDED`).
+    - Dead-letter queue: after 5 failed attempts, job is transitioned to `DEAD` without crashing the queue or blocking other workers.
+

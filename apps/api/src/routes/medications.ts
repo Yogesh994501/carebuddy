@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { resolveProfileMembership, requirePermission } from '../middleware/profile';
 import { sendError } from '../utils/errors';
 import { generateDosesForSchedule } from '../services/doseGenerator';
+import { scheduleJobsForUpcomingDoses } from '../services/jobHandlers';
 import { ScheduleFrequency } from '@prisma/client';
 
 const router = Router({ mergeParams: true });
@@ -182,6 +183,7 @@ router.post('/', requireAuth, resolveProfileMembership, requirePermission('manag
       { ...result.schedule, medication: result.med },
       req.profile!.timezone
     );
+    await scheduleJobsForUpcomingDoses(req.profile!.id);
 
     return res.status(201).json({
       medication: result.med,
@@ -348,6 +350,7 @@ router.patch('/:id', requireAuth, resolveProfileMembership, requirePermission('m
         { ...result.newSchedule, medication: result.updatedMed },
         req.profile!.timezone
       );
+      await scheduleJobsForUpcomingDoses(req.profile!.id);
     }
 
     return res.json({

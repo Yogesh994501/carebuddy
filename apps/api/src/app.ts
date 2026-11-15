@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import { env } from './config/env';
+import { prisma } from './db/prisma';
 import { sessionMiddleware } from './middleware/auth';
 import { csrfProtection } from './middleware/csrf';
 import { sendError } from './utils/errors';
@@ -11,6 +12,7 @@ import careNetworkRoutes from './routes/careNetwork';
 import invitationRoutes from './routes/invitations';
 import medicationRoutes from './routes/medications';
 import doseRoutes from './routes/doses';
+import notificationRoutes from './routes/notifications';
 
 const app = express();
 
@@ -51,17 +53,38 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({
-    api: 'healthy',
-    database: 'connected',
-    worker: 'idle',
-    timestamp: new Date().toISOString()
-  });
+app.get('/api/health', async (_req: Request, res: Response) => {
+  try {
+    const thirtySecondsAgo = new Date(Date.now() - 30_000);
+    const latestHeartbeat = await prisma.workerHeartbeat.findFirst({
+      where: {
+        lastHeartbeat: { gte: thirtySecondsAgo },
+        status: 'HEALTHY'
+      },
+      orderBy: { lastHeartbeat: 'desc' }
+    });
+
+    res.json({
+      api: 'healthy',
+      database: 'connected',
+      worker: latestHeartbeat ? 'healthy' : 'offline',
+      lastWorkerHeartbeat: latestHeartbeat?.lastHeartbeat || null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(503).json({
+      api: 'degraded',
+      database: 'error',
+      worker: 'unknown',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Mount modular API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/profiles/:profileId', careNetworkRoutes);
 app.use('/api/profiles/:profileId/medications', medicationRoutes);

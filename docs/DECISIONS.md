@@ -61,4 +61,25 @@ This log records architectural, security, and infrastructure decisions made duri
 - **Decision**: In `doseStateMachine.ts`, transition to `MISSED` strictly checks `actionSource === 'SYSTEM_WORKER'` and throws an error for all other callers.
 - **Rationale**: Guarantees that clinical intake history cannot be distorted by client-side actions.
 
+### DECISION-012: Atomic Background Job Claiming via FOR UPDATE SKIP LOCKED
+- **Context**: Section 6 and Section 16 (Gate 4) require a background worker process claiming jobs concurrently without double-processing or distributed lock contention.
+- **Decision**: Execute raw SQL `UPDATE "ScheduledJob" SET status = 'RUNNING', "lockedBy" = $1, "lockedUntil" = NOW() + INTERVAL '60 seconds', "attempts" = "attempts" + 1 WHERE id IN (SELECT id FROM "ScheduledJob" WHERE status = 'QUEUED' AND "runAt" <= NOW() ORDER BY "runAt" ASC LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING *`.
+- **Rationale**: Native database row locks with `SKIP LOCKED` provide maximum throughput and complete immunity to duplicate claims across horizontally scaled workers without requiring Redis or external message brokers.
+
+### DECISION-013: 60-Second Lease Heartbeat and Crash Recovery Sweeper
+- **Context**: Section 6 requires workers to lease jobs for 60 seconds with heartbeats, and recover gracefully from mid-job worker crashes.
+- **Decision**: Running jobs maintain an active 60-second lease via `extendLease`. The background reconciler runs `reclaimExpiredLeases()` every 60 seconds, which detects jobs with `status = 'RUNNING'` and `lockedUntil < NOW()`, re-queues them if `attempts < maxAttempts`, or moves them to `DEAD` if attempts reach 5.
+- **Rationale**: Prevents orphaned jobs from blocking the queue if a worker dies, while preventing infinite poison pill retry loops via the Dead Letter Queue.
+
+### DECISION-014: In-App Only Notification Channel & Idempotency Key Architecture
+- **Context**: Section 1 and Section 7 specify that SMS and email delivery are strictly out of scope, while notifications must be in-app only, behind a channel interface so other delivery mechanisms can be integrated in the future.
+- **Decision**: Implemented `NotificationChannel` interface with `InAppChannel` implementation. User preferences (`NotificationPreference`) are respected per notification type. Unique compound key `${type}:${profileId}:${recipientId}:${entityId}:${occurrenceKey}` prevents duplicate notifications even on job retries.
+- **Rationale**: Meets strict prompt scope constraints and ensures zero fake emails or mock delivery services are present.
+
+### DECISION-015: Non-ASCII Error Message Sanitization for Database Interoperability
+- **Context**: On Windows native PostgreSQL environments initialized with system locale encodings (e.g. WIN1252), storing UTF-8 Unicode characters such as Prisma error symbols (`→`) in VARCHAR columns throws PostgreSQL error `22P05`.
+- **Decision**: In `jobQueue.ts`, sanitize error strings via `.replace(/[^\x00-\x7F]/g, '->')` prior to persisting to `lastError`.
+- **Rationale**: Guarantees database stability across all operating systems and database character sets without data loss.
+
+
 

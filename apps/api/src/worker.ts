@@ -1,7 +1,21 @@
-import { env } from './config/env';
+import { WorkerService } from './services/workerService';
 
-console.log('Starting CareBuddy background worker process...');
-console.log(`Poll interval: ${env.WORKER_POLL_INTERVAL_MS}ms, Heartbeat interval: ${env.WORKER_HEARTBEAT_INTERVAL_MS}ms`);
+const worker = new WorkerService();
 
-// Worker loops and job handlers will be implemented in Stage 4
-console.log('Worker foundation initialized.');
+async function main() {
+  await worker.start();
+
+  const shutdown = async (signal: string) => {
+    console.log(`Received ${signal}. Shutting down worker...`);
+    await worker.stop();
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+main().catch((err) => {
+  console.error('Fatal worker process error:', err);
+  process.exit(1);
+});

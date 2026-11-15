@@ -46,3 +46,19 @@ This log records architectural, security, and infrastructure decisions made duri
 - **Decision**: `resolveProfileMembership` queries PostgreSQL on every protected request.
 - **Rationale**: Ensures zero latency between an owner revoking a member or altering permissions and the enforcement taking effect.
 
+### DECISION-009: Dose Generation Horizon and Idempotency Constraint
+- **Context**: Section 5.1 & Section 6 require a 48-hour dose generation horizon, with zero duplicates created during concurrent runs or crash replays.
+- **Decision**: Implement `INSERT ... ON CONFLICT ("scheduleId", "localDate", "localTime") DO NOTHING` in `doseGenerator.ts`.
+- **Rationale**: Database-level unique constraint provides absolute mathematical protection against duplicate doses, even under distributed worker race conditions.
+
+### DECISION-010: DST Transition Disambiguation Strategy
+- **Context**: Section 6 specifies that spring-forward nonexistent local times move to the first valid instant after the gap (03:00) and fall-back ambiguous local times use the first occurrence.
+- **Decision**: In `resolveWallClockInstant`, detect gaps by comparing formatted local time against requested wall-clock time and advance to the first valid minute; for fall-back, compute offset relative to day start.
+- **Rationale**: Avoids dropped doses or double generation on DST transition days across America/New_York, Europe/London, and 30-minute shift zones like Australia/Lord_Howe.
+
+### DECISION-011: Strict System Worker Isolation for MISSED Marking
+- **Context**: Section 5.2 and Section 16 (Gate 6) mandate that `MISSED` can only be set by the background system worker at the grace deadline, never by client apps or snooze actions.
+- **Decision**: In `doseStateMachine.ts`, transition to `MISSED` strictly checks `actionSource === 'SYSTEM_WORKER'` and throws an error for all other callers.
+- **Rationale**: Guarantees that clinical intake history cannot be distorted by client-side actions.
+
+

@@ -12,7 +12,7 @@
     "worker": "npm --workspace=@carebuddy/api run worker",
     "db:local": "node scripts/run-pg.js",
     "verify:stage1": "node scripts/verify-migration.js",
-    "verify:stage2": "node scripts/verify-stage2.js",
+    "verify:stage3": "node scripts/verify-stage3.js",
     "prisma:generate": "npm --workspace=@carebuddy/api run prisma:generate",
     "prisma:migrate": "npm --workspace=@carebuddy/api run prisma:migrate",
     "test": "npm --workspace=@carebuddy/api run test"

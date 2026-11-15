@@ -8,10 +8,10 @@ This document tracks the automated verification and status of the ten release ga
 |---|---|---|---|---|---|
 | **Gate 1** | Persistence | Create data, restart API, worker & database, log out and back in; everything persists. | `npm run test:gate1` | PENDING | To be verified in Stage 9 |
 | **Gate 2** | Background scheduling | With browser closed, advance clock; doses generated, reminders created, overdue become MISSED. | `npm run test:gate2` | PENDING | To be verified in Stage 4 |
-| **Gate 3** | Timezone & DST | Asia/Kolkata (no DST), America/New_York (spring/fall), Europe/London, Lord_Howe (30m shift). | `npm run test:gate3` | PENDING | To be verified in Stage 3 |
-| **Gate 4** | No duplicates | Concurrent workers, crash mid-job replay; 0 duplicate doses or notifications, lease recovery. | `npm run test:gate4` | PENDING | To be verified in Stage 4 |
+| **Gate 3** | Timezone & DST | Asia/Kolkata (no DST), America/New_York (spring/fall), Europe/London, Lord_Howe (30m shift). | `npm run verify:stage3` | PASS ✅ | 6/6 tests passed. Zero dropped or doubled doses on transition days; spring-forward moves to 03:00; fall-back uses first occurrence; regeneration on timezone change verified. |
+| **Gate 4** | No duplicates | Concurrent workers, crash mid-job replay; 0 duplicate doses or notifications, lease recovery. | `npm run verify:stage3` | PASS (Generation Half) ✅ | 2 concurrent workers running generation produced 0 duplicate doses; job replay after crash inserted 0 new records. |
 | **Gate 5** | Backend permissions | Route-by-role matrix (owner, family, caregiver, cross-profile, revoked, anon) + instant revocation. | `npm run verify:stage2` | PASS (Stage 2 routes) | 16/16 tests passed. Anonymous rejected (401), cross-profile returns 404 (no existence leak), owner-only operations enforced (403), revoked member blocked immediately (404). |
-| **Gate 6** | MISSED != TAKEN | Reminder opening/snooze != TAKEN; MISSED only by worker; adherence excludes unconfirmed; audit retained. | `npm run test:gate6` | PENDING | To be verified in Stage 3 & Stage 4 |
+| **Gate 6** | MISSED != TAKEN | Reminder opening/snooze != TAKEN; MISSED only by worker; adherence excludes unconfirmed; audit retained. | `npm run verify:stage3` | PASS (Transition Half) ✅ | Snooze never creates TAKEN; max 3 snoozes enforced; client cannot set MISSED; correcting MISSED preserves history; adherence excludes pending/snoozed within grace. |
 | **Gate 7** | Synchronized dashboards | Playwright 3 sessions (owner, family, caregiver): dose/appointment change syncs <= 2s without reload. | `npm run test:gate7` | PENDING | To be verified in Stage 6 |
 | **Gate 8** | Mobile & accessibility | Playwright 375, 768, 1280px; axe-core 0 serious/critical violations; keyboard dose recording; elderly mode. | `npm run test:gate8` | PENDING | To be verified in Stage 8 |
 | **Gate 9** | AI safety | Context builder isolation; emergency short-circuit; output filters; prompt-injection tests (30 red-team prompts). | `npm run test:gate9` | PENDING | To be verified in Stage 7 |
@@ -42,3 +42,23 @@ This document tracks the automated verification and status of the ten release ga
     - Cross-profile ID guessing returns 404 (never 403, preventing resource existence leakage).
     - Owner-only routes (timezone/reminder editing, inviting, member revocation, full audit log) strictly enforced against family and caregiver.
     - Real-time revocation verified: deleting/revoking a member takes effect immediately on their next request (returns 404).
+
+### Stage 3 Acceptance: Medications, Dose Engine & Invariants
+- **Target**: Gate 3 (Timezone & DST), Gate 4 generation half (no duplicates under concurrency), and Gate 6 transition half (MISSED != TAKEN).
+- **Verification Command**: `npm run verify:stage3`
+- **Result**: PASS ✅ (13/13 tests passing)
+  - `src/tests/gate3_timezone_dst.test.ts`:
+    - Asia/Kolkata (fixed UTC+5:30) wall-clock precision.
+    - America/New_York spring-forward (02:30 moves to 03:00 without dropping dose).
+    - America/New_York fall-back (01:30 uses first occurrence without doubling).
+    - Europe/London and Australia/Lord_Howe (30-minute DST shift) instant accuracy.
+    - Timezone change voids future unacted doses and regenerates under new zone while leaving past doses untouched.
+  - `src/tests/gate4_generator_concurrency.test.ts`:
+    - 2 concurrent workers running generation produced 0 duplicate doses.
+    - Job replay after simulated crash inserted 0 new records.
+  - `src/tests/gate6_state_machine.test.ts`:
+    - Snoozing a dose sets status = SNOOZED, never TAKEN; scheduledAt (MISSED deadline) is never moved.
+    - Max 3 snoozes enforced.
+    - Client apps cannot mark MISSED (restricted to SYSTEM_WORKER).
+    - Correcting MISSED preserves historical MISSED record in MedicationLog and appends CORRECTION.
+    - Adherence calculation excludes pending and snoozed doses inside their grace period.

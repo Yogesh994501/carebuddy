@@ -27,27 +27,40 @@ export function resolveWallClockInstant(
   const hour = parseInt(hourStr, 10);
   const minute = parseInt(minuteStr, 10);
 
-  let dt = DateTime.fromObject({ year, month, day, hour, minute }, { zone });
+  const startOfDay = DateTime.fromObject({ year, month, day, hour: 0, minute: 0 }, { zone });
+  const direct = DateTime.fromObject({ year, month, day, hour, minute }, { zone });
 
-  if (!dt.isValid) {
-    // Gap (spring forward): move to the first valid instant after the gap
-    for (let offset = 1; offset <= 120; offset++) {
-      const probe = DateTime.fromObject(
-        { year, month, day, hour, minute: minute + offset },
-        { zone }
-      );
-      if (probe.isValid) {
-        dt = probe;
-        break;
+  // Did a spring-forward gap occur? (i.e. direct.hour !== hour or direct.minute !== minute)
+  if (direct.hour !== hour || direct.minute !== minute) {
+    // Gap: move to the first valid instant after the gap
+    for (let m = 0; m <= 180; m++) {
+      const probeHour = hour + Math.floor((minute + m) / 60);
+      const probeMin = (minute + m) % 60;
+      const probe = DateTime.fromObject({ year, month, day, hour: probeHour, minute: probeMin }, { zone });
+      if (probe.hour === probeHour && probe.minute === probeMin) {
+        return {
+          scheduledAt: probe.toUTC(),
+          actualLocalDate: probe.toFormat('yyyy-MM-dd'),
+          actualLocalTime: probe.toFormat('HH:mm')
+        };
       }
     }
   }
 
-  // Fall back: DateTime.fromObject uses the first occurrence by default in Luxon
+  // Ambiguous fall-back: check if an earlier occurrence exists by checking offset relative to midnight
+  const fromMidnight = startOfDay.plus({ hours: hour, minutes: minute });
+  if (fromMidnight.toFormat('HH:mm') === localTime) {
+    return {
+      scheduledAt: fromMidnight.toUTC(),
+      actualLocalDate: fromMidnight.toFormat('yyyy-MM-dd'),
+      actualLocalTime: fromMidnight.toFormat('HH:mm')
+    };
+  }
+
   return {
-    scheduledAt: dt.toUTC(),
-    actualLocalDate: dt.toFormat('yyyy-MM-dd'),
-    actualLocalTime: dt.toFormat('HH:mm')
+    scheduledAt: direct.toUTC(),
+    actualLocalDate: direct.toFormat('yyyy-MM-dd'),
+    actualLocalTime: direct.toFormat('HH:mm')
   };
 }
 

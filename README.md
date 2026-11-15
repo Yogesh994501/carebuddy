@@ -73,4 +73,11 @@ PostgreSQL triggers (`check_medication_log_immutable()` and `check_audit_log_imm
   - Profile creation (DIRECT and ASSISTED modes with attestation), membership resolution per-request, permission middleware.
   - Care Network management, 10-character unambiguous invitation codes with HMAC-SHA256, atomic acceptance & revocation.
   - Gate 5 Matrix verified (16/16 tests passing).
-- **Stage 3 (Medications and Dose Engine)**: Next stage.
+- **Stage 3 (Medications and Dose Engine)**: Complete ✅
+  - Medication CRUD, prescriber directions confirmation, versioned schedules, soft deletion.
+  - Dose generation engine (48h rolling horizon, ON CONFLICT DO NOTHING duplicate prevention).
+  - DST handling (Asia/Kolkata, America/New_York spring/fall, Europe/London, Australia/Lord_Howe 30-min shift) and timezone change regeneration.
+  - State machine (conditional update, optimistic locking, snooze limits, worker-only MISSED, correction history preservation).
+  - Adherence calculation service (`docs/ADHERENCE.md`).
+  - Gates 3, 4 (generation), and 6 (transition) verified (13/13 tests passing).
+- **Stage 4 (Worker and Notifications)**: Next stage.

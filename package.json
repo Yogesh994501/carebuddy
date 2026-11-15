@@ -20,6 +20,7 @@
     "verify:stage5": "node scripts/verify-stage5.js",
     "verify:stage6": "node scripts/verify-stage6.js",
     "verify:stage7": "node scripts/verify-stage7.js",
+    "verify:stage8": "node scripts/verify-stage8.js",
     "verify:assistant": "node scripts/verify-assistant-mark.js",
     "prisma:generate": "npm --workspace=@carebuddy/api run prisma:generate",
     "prisma:migrate": "npm --workspace=@carebuddy/api run prisma:migrate",
@@ -29,6 +30,7 @@
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
+    "axe-core": "^4.14.0",
     "embedded-postgres": "^18.6.0-beta.19",
     "pg": "^8.13.1"
   }

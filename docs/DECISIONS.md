@@ -107,6 +107,17 @@ This log records architectural, security, and infrastructure decisions made duri
   6. **Output Validation & Labeling**: Model responses are checked for clinical diagnosis or dose alterations, replaced with safe medical fallback if violated, and labeled as either `'From your CareBuddy records'` or `'General information'`.
 - **Rationale**: As specified in Section 10, LLM behavior cannot be mathematically guaranteed by prompt engineering alone; multi-layered deterministic boundary checks guarantee compliance and safety even under adversarial jailbreak attempts.
 
+### DECISION-020: Accessibility Architecture & WCAG 2.2 AA Contrast Enforcement
+- **Context**: Section 12 and Section 16 (Gate 8) mandate WCAG 2.2 AA compliance, elderly-friendly physical and visual design, text scaling up to 200%, visible focus states, reduced motion support, and mobile-first responsive layouts down to 375px.
+- **Decision**:
+  1. **Color Contrast Rules**: Explicitly prohibited low-contrast accent colors (`#D99B43` Amber, `#A99AE8` Lavender, `#8DB9A6` Soft Sage) as text on white backgrounds; reserved them exclusively for background badge/pill fills paired with high-contrast text (`#1E2B28`).
+  2. **Touch Targets & Confirmation**: Standard buttons meet minimum 48px height (`min-h-[48px]`), expanding to 56px (`min-h-[56px]`) when Elderly Mode is activated. Skipping doses requires explicit selection of a clinically relevant reason to prevent accidental omissions.
+  3. **Visual Focus & Keyboard Control**: Established a high-contrast 3px solid focus ring (`outline: 3px solid #397B68 !important; outline-offset: 3px !important`) for all interactive elements. All dose recording actions are rendered as standard semantic `<button>` elements.
+  4. **Text Scaling & Reduced Motion**: Implemented base 18px body font with user-selectable scaling (100%, 125%, 150%, 200%) synchronized via `UserSettings` API and localStorage. Reduced motion preferences collapse transition and animation timings to 0.01ms.
+  5. **Responsive Layouts**: Designed fluid mobile-first flex and grid containers (`grid-cols-1 md:grid-cols-3`) without horizontal scrolling or dense `<table>` elements across 375px, 768px, and 1280px viewports.
+- **Rationale**: Accommodates natural visual, cognitive, and motor changes associated with healthy aging without compromising design aesthetic or performance.
+
+
 
 
 

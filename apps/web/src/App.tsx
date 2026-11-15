@@ -4,12 +4,16 @@ import { ElderlyDashboard, DoseItem } from './components/ElderlyDashboard';
 import { FamilyDashboard } from './components/FamilyDashboard';
 import { CaregiverDashboard, CaregiverDoseItem } from './components/CaregiverDashboard';
 import { AssistantChat } from './components/AssistantChat';
-import { ShieldCheck, UserCheck, Users, Stethoscope } from 'lucide-react';
+import { SettingsModal } from './components/SettingsModal';
+import { ShieldCheck, UserCheck, Users, Stethoscope, Sliders } from 'lucide-react';
 import { useRealTimeSSE } from './hooks/useRealTimeSSE';
+import { useAccessibility } from './hooks/useAccessibility';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'elderly' | 'family' | 'caregiver'>('elderly');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { settings, updateSetting } = useAccessibility();
   const demoProfileId = 'demo-profile-rose-01';
 
   // Real-time SSE hook (listens to /api/profiles/:profileId/events and refetches via REST)
@@ -191,10 +195,21 @@ export function App() {
           </button>
         </div>
 
-        <div className="hidden sm:flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#E7F0EC] text-[#397B68]">
-            <ShieldCheck className="w-3.5 h-3.5" /> Secure HIPAA/Auth
-          </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Open Display and Accessibility Settings"
+            className="p-2 rounded-xl text-gray-600 hover:text-[#1E2B28] hover:bg-[#F6F8F5] border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-bold"
+          >
+            <Sliders className="w-4 h-4 text-[#397B68]" />
+            <span className="hidden md:inline">Accessibility</span>
+          </button>
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#E7F0EC] text-[#397B68]">
+              <ShieldCheck className="w-3.5 h-3.5" /> Secure HIPAA/Auth
+            </span>
+          </div>
         </div>
       </header>
 
@@ -265,6 +280,14 @@ export function App() {
         initialConsentGranted={true}
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
+      />
+
+      {/* Accessibility & Display Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onUpdateSetting={updateSetting}
       />
 
       {/* Footer */}

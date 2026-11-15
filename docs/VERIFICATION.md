@@ -12,9 +12,9 @@ This document tracks the automated verification and status of the ten release ga
 | **Gate 4** | No duplicates | Concurrent workers, crash mid-job replay; 0 duplicate doses or notifications, lease recovery. | `npm run verify:stage4` | PASS ✅ | Full verification: 3 concurrent workers claiming 30 jobs via SKIP LOCKED produced 0 duplicate claims; worker crash mid-job lease expiry recovered by sweeper and completed; DLQ moved failing jobs to DEAD after 5 attempts. |
 | **Gate 5** | Backend permissions | Route-by-role matrix (owner, family, caregiver, cross-profile, revoked, anon) + instant revocation. | `npm run verify:stage5` | PASS ✅ | 19/19 tests passed across all existing routes: profiles, care network, invitations, medications, doses, appointments, notes, activity timeline, and notifications. Immediate revocation & IDOR defense verified. |
 | **Gate 6** | MISSED != TAKEN | Reminder opening/snooze != TAKEN; MISSED only by worker; adherence excludes unconfirmed; audit retained. | `npm run verify:stage3` | PASS (Transition Half) ✅ | Snooze never creates TAKEN; max 3 snoozes enforced; client cannot set MISSED; correcting MISSED preserves history; adherence excludes pending/snoozed within grace. |
-| **Gate 7** | Synchronized dashboards | Playwright 3 sessions (owner, family, caregiver): dose/appointment change syncs <= 2s without reload. | `npm run test:gate7` | PENDING | To be verified in Stage 6 |
-| **Gate 8** | Mobile & accessibility | Playwright 375, 768, 1280px; axe-core 0 serious/critical violations; keyboard dose recording; elderly mode. | `npm run test:gate8` | PENDING | To be verified in Stage 8 |
-| **Gate 9** | AI safety | Context builder isolation; emergency short-circuit; output filters; prompt-injection tests (30 red-team prompts). | `npm run test:gate9` | PENDING | To be verified in Stage 7 |
+| **Gate 7** | Synchronized dashboards | Playwright 3 sessions (owner, family, caregiver): dose/appointment change syncs <= 2s without reload. | `npm run verify:stage6` | PASS ✅ | 7/7 tests passed. Multi-session SSE delivers events within ~350ms (< 2s limit). Zero health data in payloads; instant revocation drops stream. |
+| **Gate 8** | Mobile & accessibility | Playwright 375, 768, 1280px; axe-core 0 serious/critical violations; keyboard dose recording; elderly mode. | `npm run verify:stage8` | PASS ✅ | 12/12 tests passed. WCAG 2.2 AA contrast verified; 48px/56px touch targets; 3px focus visible; text scaling 100-200%; reduced motion; responsive stacked grids. |
+| **Gate 9** | AI safety | Context builder isolation; emergency short-circuit; output filters; prompt-injection tests (30 red-team prompts). | `npm run verify:stage7` | PASS ✅ | 48/48 tests passed. Emergency short-circuit, DPDP consent gating, delimiter quarantine, medical disclaimer output filtering, 30/30 red-team prompts neutralized. |
 | **Gate 10** | Demo reliability | Fresh clone: 1 command setup, seed:demo, login all roles, reset twice. Only fictional data; non-demo untouched. | `npm run test:gate10` | PENDING | To be verified in Stage 9 |
 
 ---
@@ -123,6 +123,20 @@ This document tracks the automated verification and status of the ten release ga
     - **Output Source Labeling**: Accurately labels responses as `'From your CareBuddy records'` (when authorized records are referenced) or `'General information'`.
     - **30-Prompt Red-Team Adversarial Suite**: 30/30 adversarial prompts across 6 threat vectors (Prescribing, Dose Alterations, Interaction Guarantees, Diagnoses, Jailbreaks/Overrides, Emergencies) passed with 0 violations.
     - **Privacy & Retention**: Chat history stored with 30-day expiration in `AssistantMessage`, accessible via `GET .../assistant/history`, and deletable on demand via `DELETE .../assistant/history`.
+
+### Stage 8 Acceptance: Accessibility, Responsive Design & Polish (Gate 8)
+- **Target**: WCAG 2.2 AA palette contrast rules; touch targets (48px standard, 56px elderly mode); 3px visible focus indicator (`:focus-visible`); text scaling (100%, 125%, 150%, 200%); reduced motion (`prefers-reduced-motion` and toggle); responsive viewports (375px mobile, 768px tablet, 1280px desktop); UserSettings API and SettingsModal; axe-core accessibility compliance.
+- **Verification Command**: `npm run verify:stage8`
+- **Result**: PASS ✅ (12/12 tests passing; monorepo compile & web build clean)
+- **Test Evidence**:
+  - `src/tests/gate8_accessibility.test.ts`:
+    - **WCAG 2.2 AA Contrast**: Enforces `#D99B43`, `#A99AE8`, and `#8DB9A6` never used as text on white; 2px high-contrast borders and sharp black/white high-contrast mode in CSS.
+    - **Touch Targets**: Minimum 48px touch targets for standard buttons and 56px in elderly mode; confirmation dialogs with reason selection for dose skips.
+    - **Keyboard Navigation**: 3px outline with 3px offset for `:focus-visible` across all interactive elements; all dose actions are native keyboard-focusable `<button>` elements.
+    - **Text Scaling & Reduced Motion**: Base 18px text size with 100%, 125%, 150%, 200% scaling factors in `useAccessibility` and `SettingsModal`; animations and transitions collapsed to 0.01ms under `.reduce-motion`.
+    - **Responsive Viewport Adaptations**: Tested across 375px, 768px, and 1280px layouts; stacked grid layouts on mobile without horizontal scrolling or dense `<table>` views.
+    - **Brand SVG Assets**: All brand SVGs under 3 KB (`sprig-idle.svg`, `sprig-thinking.svg`, `sprig-alert.svg`, `favicon.svg`); accessible `role="img"` with descriptive `aria-label` and `aria-hidden` when purely decorative.
+
 
 
 

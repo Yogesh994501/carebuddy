@@ -53,9 +53,9 @@ export async function clearDemoData(prisma: PrismaClient) {
   });
   const demoUserIds = demoUsers.map(u => u.id);
 
-  // Temporarily disable triggers for administrative demo reset
-  await prisma.$executeRawUnsafe(`ALTER TABLE "MedicationLog" DISABLE TRIGGER ALL;`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "AuditLog" DISABLE TRIGGER ALL;`);
+  // Temporarily disable user-defined immutability triggers for administrative demo reset
+  await prisma.$executeRawUnsafe(`ALTER TABLE "MedicationLog" DISABLE TRIGGER trg_medication_log_immutable;`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "AuditLog" DISABLE TRIGGER trg_audit_log_immutable;`);
 
   try {
     if (demoProfileIds.length > 0) {
@@ -154,8 +154,8 @@ export async function clearDemoData(prisma: PrismaClient) {
     }
   } finally {
     // Always re-enable triggers
-    await prisma.$executeRawUnsafe(`ALTER TABLE "MedicationLog" ENABLE TRIGGER ALL;`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "AuditLog" ENABLE TRIGGER ALL;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "MedicationLog" ENABLE TRIGGER trg_medication_log_immutable;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AuditLog" ENABLE TRIGGER trg_audit_log_immutable;`);
   }
 }
 

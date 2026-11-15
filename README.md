@@ -46,6 +46,8 @@ CareBuddy is structured as a TypeScript monorepo using npm workspaces:
    npm run verify:stage1      # Stage 1 database migration & append-only triggers
    npm run verify:stage2      # Stage 2 auth & Gate 5 permission matrix
    npm run verify:stage3      # Stage 3 dose engine, timezones & state machine
+   npm run verify:stage4      # Stage 4 worker, SKIP LOCKED & Gates 2 & 4
+   npm run verify:stage5      # Stage 5 appointments, notes & Gate 5 complete
    npm run verify:assistant   # Section 12a Sprig identity & accessibility
    npm run typecheck          # Monorepo TypeScript check
    npm run build              # Full monorepo production build
@@ -91,4 +93,11 @@ PostgreSQL triggers (`check_medication_log_immutable()` and `check_audit_log_imm
   - Handlers: dose generator, dose upcoming reminder, dose missed check (enforces worker-only MISSED), appointment reminder.
   - In-app notification center (idempotent `InAppChannel`, user preferences, read tracking).
   - Gates 2 & 4 verified (7/7 tests passing).
-- **Stage 5 (Appointments and Care Network)**: Next stage.
+- **Stage 5 (Appointments and Care Network)**: Complete ✅
+  - Medical appointments CRUD (`/api/profiles/:profileId/appointments`) with wall-clock Luxon resolution.
+  - Automatic 24-hour and 2-hour reminder background scheduling.
+  - Rescheduling preserves `rescheduledFrom`, updates reminder jobs, logs audit, and sends in-app notifications.
+  - Caregiver notes (`/api/profiles/:profileId/notes`) with flagged priority and author deletion control.
+  - Curated shared activity timeline (`/api/profiles/:profileId/activity`) isolating sensitive admin audit trails.
+  - Gate 5 Matrix completely verified across all existing routes (19/19 tests passing).
+- **Stage 6 (Dashboards and Real-Time SSE)**: Next stage.

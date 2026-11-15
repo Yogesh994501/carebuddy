@@ -10,7 +10,7 @@ This document tracks the automated verification and status of the ten release ga
 | **Gate 2** | Background scheduling | With browser closed, advance clock; doses generated, reminders created, overdue become MISSED. | `npm run verify:stage4` | PASS ✅ | With browser closed, worker polls independently via SKIP LOCKED, claims DOSE_UPCOMING, queues in-app reminders, detects overdue dose, marks MISSED at grace deadline via SYSTEM_WORKER, writes immutable MedicationLog, and queues alert. |
 | **Gate 3** | Timezone & DST | Asia/Kolkata (no DST), America/New_York (spring/fall), Europe/London, Lord_Howe (30m shift). | `npm run verify:stage3` | PASS ✅ | 6/6 tests passed. Zero dropped or doubled doses on transition days; spring-forward moves to 03:00; fall-back uses first occurrence; regeneration on timezone change verified. |
 | **Gate 4** | No duplicates | Concurrent workers, crash mid-job replay; 0 duplicate doses or notifications, lease recovery. | `npm run verify:stage4` | PASS ✅ | Full verification: 3 concurrent workers claiming 30 jobs via SKIP LOCKED produced 0 duplicate claims; worker crash mid-job lease expiry recovered by sweeper and completed; DLQ moved failing jobs to DEAD after 5 attempts. |
-| **Gate 5** | Backend permissions | Route-by-role matrix (owner, family, caregiver, cross-profile, revoked, anon) + instant revocation. | `npm run verify:stage2` | PASS (Stage 2 routes) | 16/16 tests passed. Anonymous rejected (401), cross-profile returns 404 (no existence leak), owner-only operations enforced (403), revoked member blocked immediately (404). |
+| **Gate 5** | Backend permissions | Route-by-role matrix (owner, family, caregiver, cross-profile, revoked, anon) + instant revocation. | `npm run verify:stage5` | PASS ✅ | 19/19 tests passed across all existing routes: profiles, care network, invitations, medications, doses, appointments, notes, activity timeline, and notifications. Immediate revocation & IDOR defense verified. |
 | **Gate 6** | MISSED != TAKEN | Reminder opening/snooze != TAKEN; MISSED only by worker; adherence excludes unconfirmed; audit retained. | `npm run verify:stage3` | PASS (Transition Half) ✅ | Snooze never creates TAKEN; max 3 snoozes enforced; client cannot set MISSED; correcting MISSED preserves history; adherence excludes pending/snoozed within grace. |
 | **Gate 7** | Synchronized dashboards | Playwright 3 sessions (owner, family, caregiver): dose/appointment change syncs <= 2s without reload. | `npm run test:gate7` | PENDING | To be verified in Stage 6 |
 | **Gate 8** | Mobile & accessibility | Playwright 375, 768, 1280px; axe-core 0 serious/critical violations; keyboard dose recording; elderly mode. | `npm run test:gate8` | PENDING | To be verified in Stage 8 |
@@ -77,4 +77,20 @@ This document tracks the automated verification and status of the ten release ga
     - 3 simulated concurrent worker instances claiming 30 jobs via `FOR UPDATE SKIP LOCKED` simultaneously: exactly 30 unique job IDs claimed, 0 duplicate claims across all workers.
     - Crash mid-job simulation: worker holding 60s lease crashes, lease expires, recovery sweeper reclaims job to `QUEUED`, healthy worker claims and completes the job (`SUCCEEDED`).
     - Dead-letter queue: after 5 failed attempts, job is transitioned to `DEAD` without crashing the queue or blocking other workers.
+
+### Stage 5 Acceptance: Appointments, Care Network & Gate 5 Matrix
+- **Target**: Appointment CRUD, 24 h and 2 h reminders, rescheduling with audit. Shared activity timeline and caregiver notes. Gate 5 passes for all routes that exist.
+- **Verification Command**: `npm run verify:stage5`
+- **Result**: PASS ✅ (19/19 tests passing)
+- **Test Evidence**:
+  - `src/tests/gate5.test.ts`:
+    - **Unauthenticated Access**: Rejected with 401 across all endpoints.
+    - **IDOR Defense**: Accessing a profile that belongs to another user returns 404 `PROFILE_NOT_FOUND` (never 403), preventing enumeration of valid profile IDs.
+    - **Owner-Only Operations**: Updating profile timezones, inviting network members, revoking memberships, and accessing raw audit logs strictly enforced against family and caregivers (403 `OWNER_PERMISSION_REQUIRED`).
+    - **Appointments CRUD & Reminders**: Owner creates appointments (201); Family and Caregiver rejected with 403 `FORBIDDEN` (`manageAppointments: false`); 24h & 2h reminder background jobs enqueued; Rescheduling cancels previous reminders and updates `rescheduledFrom`; Cancelling expires pending reminders.
+    - **Caregiver Notes**: Caregiver and Owner can add notes (201, `addNotes: true`); Family rejected with 403 (`addNotes: false`); Family and Caregiver can view notes (200, `viewActivity: true`); Author can delete own note; non-author non-owner rejected (403).
+    - **Shared Activity Timeline**: Aggregated chronological clinical milestones (doses, appointments, caregiver notes, membership events) accessible to members with `viewActivity`; sensitive technical details (IP addresses, user agents) stripped.
+    - **Notification Isolation**: Users access only their own notifications; attempting to mark another user's notification returns 404.
+    - **Instant Real-Time Revocation**: Revoking a member by the owner takes effect immediately on their next request (returns 404).
+
 

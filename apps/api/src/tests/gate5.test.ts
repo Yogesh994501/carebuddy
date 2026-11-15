@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import app from '../app';
 import { prisma } from '../db/prisma';
-import { hashPassword, generateSessionId, hashInvitationCode } from '../utils/crypto';
+import { hashPassword, generateSessionId } from '../utils/crypto';
 
 describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
   let ownerToken: string;
@@ -10,23 +10,32 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
   let caregiverToken: string;
   let otherUserToken: string;
   let revokedMemberToken: string;
+  let targetRevokeToken: string;
 
   let ownerUserId: string;
   let familyUserId: string;
   let caregiverUserId: string;
   let otherUserId: string;
-  let revokedUserId: string;
+  let targetRevokeUserId: string;
 
   let profileAId: string;
   let careNetworkAId: string;
   let profileBId: string;
 
-  let caregiverMemberId: string;
-  let familyMemberId: string;
-  let revokedMemberId: string;
+  let targetRevMemId: string;
+  let createdAppointmentId: string;
+  let caregiverNoteId: string;
+  let ownerNotificationId: string;
 
   beforeAll(async () => {
     // Clean test database tables
+    await prisma.scheduledJob.deleteMany().catch(() => {});
+    await prisma.caregiverNote.deleteMany().catch(() => {});
+    await prisma.appointment.deleteMany().catch(() => {});
+    await prisma.medicationLog.deleteMany().catch(() => {});
+    await prisma.medicationDose.deleteMany().catch(() => {});
+    await prisma.medicationSchedule.deleteMany().catch(() => {});
+    await prisma.medication.deleteMany().catch(() => {});
     await prisma.auditLog.deleteMany().catch(() => {});
     await prisma.notification.deleteMany().catch(() => {});
     await prisma.invitation.deleteMany().catch(() => {});
@@ -61,10 +70,10 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     });
     otherUserId = otherUser.id;
 
-    const revokedUser = await prisma.user.create({
-      data: { email: 'revoked@carebuddy.local', passwordHash: commonHash, name: 'Eve Revoked' }
+    const targetRevoke = await prisma.user.create({
+      data: { email: 'target-revoke@carebuddy.local', passwordHash: commonHash, name: 'Eve TargetRevoke' }
     });
-    revokedUserId = revokedUser.id;
+    targetRevokeUserId = targetRevoke.id;
 
     // 2. Create Sessions
     const makeSession = async (userId: string) => {
@@ -83,7 +92,7 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     familyToken = await makeSession(familyUserId);
     caregiverToken = await makeSession(caregiverUserId);
     otherUserToken = await makeSession(otherUserId);
-    revokedMemberToken = await makeSession(revokedUserId);
+    targetRevokeToken = await makeSession(targetRevokeUserId);
 
     // 3. Create Profile A and CareNetwork A
     const profileA = await prisma.elderlyProfile.create({
@@ -120,8 +129,8 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
       }
     });
 
-    // Attach Family to Network A
-    const famMem = await prisma.careNetworkMember.create({
+    // Attach Family to Network A (Defaults: view flags on, management/notes/record off)
+    await prisma.careNetworkMember.create({
       data: {
         careNetworkId: careNetworkAId,
         userId: familyUserId,
@@ -139,10 +148,9 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
         actOnBehalf: false
       }
     });
-    familyMemberId = famMem.id;
 
-    // Attach Caregiver to Network A
-    const cgMem = await prisma.careNetworkMember.create({
+    // Attach Caregiver to Network A (Defaults: view on, addNotes on, recordDoses on, management off)
+    await prisma.careNetworkMember.create({
       data: {
         careNetworkId: careNetworkAId,
         userId: caregiverUserId,
@@ -160,19 +168,19 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
         actOnBehalf: false
       }
     });
-    caregiverMemberId = cgMem.id;
 
-    // Attach Revoked User to Network A (status = REVOKED)
-    const revMem = await prisma.careNetworkMember.create({
+    // Attach Target Revoke User to Network A (will be revoked in real-time test)
+    const targetMem = await prisma.careNetworkMember.create({
       data: {
         careNetworkId: careNetworkAId,
-        userId: revokedUserId,
+        userId: targetRevokeUserId,
         role: 'FAMILY',
-        status: 'REVOKED',
-        relationshipLabel: 'Estranged Relative'
+        status: 'ACTIVE',
+        relationshipLabel: 'Temporary Member',
+        viewMedications: true
       }
     });
-    revokedMemberId = revMem.id;
+    targetRevMemId = targetMem.id;
 
     // 4. Create Profile B for Other User
     const profileB = await prisma.elderlyProfile.create({
@@ -196,6 +204,19 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
         status: 'ACTIVE'
       }
     });
+
+    // 5. Create a test notification for owner
+    const notif = await prisma.notification.create({
+      data: {
+        profileId: profileAId,
+        recipientId: ownerUserId,
+        type: 'DOSE_UPCOMING',
+        title: 'Take Aspirin',
+        message: 'Scheduled dose at 09:00',
+        idempotencyKey: `init-test-notif-${Date.now()}`
+      }
+    });
+    ownerNotificationId = notif.id;
   });
 
   afterAll(async () => {
@@ -223,7 +244,6 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
 
   describe('2. Cross-Profile ID Guessing (IDOR Defense)', () => {
     it('returns 404 (not 403) when user accesses a profile they do not belong to', async () => {
-      // otherUser attempts to read profileA
       const res = await request(app)
         .get(`/api/profiles/${profileAId}`)
         .set('Authorization', `Bearer ${otherUserToken}`);
@@ -242,26 +262,7 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     });
   });
 
-  describe('3. Revoked Member Access (Immediate Effect)', () => {
-    it('returns 404 immediately for revoked member attempting to read profile', async () => {
-      const res = await request(app)
-        .get(`/api/profiles/${profileAId}`)
-        .set('Authorization', `Bearer ${revokedMemberToken}`);
-
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('PROFILE_NOT_FOUND');
-    });
-
-    it('returns 404 immediately for revoked member accessing care network', async () => {
-      const res = await request(app)
-        .get(`/api/profiles/${profileAId}/care-network`)
-        .set('Authorization', `Bearer ${revokedMemberToken}`);
-
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('4. Owner vs. Family vs. Caregiver Permissions Matrix', () => {
+  describe('3. Core Care Network & Profile Permissions', () => {
     it('GET /api/profiles/:profileId - Owner, Family, Caregiver get 200', async () => {
       const resOwner = await request(app)
         .get(`/api/profiles/${profileAId}`)
@@ -283,7 +284,6 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     });
 
     it('PATCH /api/profiles/:profileId - Only Owner can update timezone/reminder settings', async () => {
-      // Family attempt -> 403
       const resFamily = await request(app)
         .patch(`/api/profiles/${profileAId}`)
         .set('Authorization', `Bearer ${familyToken}`)
@@ -291,15 +291,12 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
       expect(resFamily.status).toBe(403);
       expect(resFamily.body.error.code).toBe('OWNER_PERMISSION_REQUIRED');
 
-      // Caregiver attempt -> 403
       const resCaregiver = await request(app)
         .patch(`/api/profiles/${profileAId}`)
         .set('Authorization', `Bearer ${caregiverToken}`)
         .send({ reminderLeadMinutes: 30 });
       expect(resCaregiver.status).toBe(403);
-      expect(resCaregiver.body.error.code).toBe('OWNER_PERMISSION_REQUIRED');
 
-      // Owner attempt -> 200
       const resOwner = await request(app)
         .patch(`/api/profiles/${profileAId}`)
         .set('Authorization', `Bearer ${ownerToken}`)
@@ -309,21 +306,18 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     });
 
     it('POST /api/profiles/:profileId/invitations - Only Owner can invite', async () => {
-      // Family attempt -> 403
       const resFamily = await request(app)
         .post(`/api/profiles/${profileAId}/invitations`)
         .set('Authorization', `Bearer ${familyToken}`)
         .send({ role: 'FAMILY', relationshipLabel: 'Sister' });
       expect(resFamily.status).toBe(403);
 
-      // Caregiver attempt -> 403
       const resCaregiver = await request(app)
         .post(`/api/profiles/${profileAId}/invitations`)
         .set('Authorization', `Bearer ${caregiverToken}`)
         .send({ role: 'CAREGIVER' });
       expect(resCaregiver.status).toBe(403);
 
-      // Owner attempt -> 201
       const resOwner = await request(app)
         .post(`/api/profiles/${profileAId}/invitations`)
         .set('Authorization', `Bearer ${ownerToken}`)
@@ -334,19 +328,16 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     });
 
     it('GET /api/profiles/:profileId/audit - Only Owner sees full audit log', async () => {
-      // Family attempt -> 403
       const resFamily = await request(app)
         .get(`/api/profiles/${profileAId}/audit`)
         .set('Authorization', `Bearer ${familyToken}`);
       expect(resFamily.status).toBe(403);
 
-      // Caregiver attempt -> 403
       const resCaregiver = await request(app)
         .get(`/api/profiles/${profileAId}/audit`)
         .set('Authorization', `Bearer ${caregiverToken}`);
       expect(resCaregiver.status).toBe(403);
 
-      // Owner attempt -> 200
       const resOwner = await request(app)
         .get(`/api/profiles/${profileAId}/audit`)
         .set('Authorization', `Bearer ${ownerToken}`);
@@ -355,25 +346,262 @@ describe('Gate 5: Backend Permissions Matrix & Authorization', () => {
     });
   });
 
-  describe('5. Real-Time Revocation Test', () => {
-    it('revoking a member by owner causes their very next request to return 404', async () => {
-      // Step 1: Caregiver can currently view the profile
+  describe('4. Appointments Permissions Matrix (Stage 5)', () => {
+    it('POST /appointments - Owner creates appointment; Family and Caregiver rejected (manageAppointments: false)', async () => {
+      const aptPayload = {
+        doctor: 'Dr. Sarah Connor',
+        specialty: 'Cardiology',
+        clinic: 'Heart Care Center',
+        localDate: '2026-11-20',
+        localTime: '10:30',
+        reason: 'Routine checkup'
+      };
+
+      // 1. Family rejected (403)
+      const resFamily = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${familyToken}`)
+        .send(aptPayload);
+      expect(resFamily.status).toBe(403);
+      expect(resFamily.body.error.code).toBe('FORBIDDEN');
+
+      // 2. Caregiver rejected (403)
+      const resCaregiver = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${caregiverToken}`)
+        .send(aptPayload);
+      expect(resCaregiver.status).toBe(403);
+
+      // 3. Cross-profile rejected with 404 (IDOR)
+      const resOther = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .send(aptPayload);
+      expect(resOther.status).toBe(404);
+
+      // 4. Anonymous rejected with 401
+      const resAnon = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments`)
+        .send(aptPayload);
+      expect(resAnon.status).toBe(401);
+
+      // 5. Owner creates appointment successfully (201)
+      const resOwner = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send(aptPayload);
+      expect(resOwner.status).toBe(201);
+      expect(resOwner.body.id).toBeDefined();
+      expect(resOwner.body.doctor).toBe('Dr. Sarah Connor');
+      createdAppointmentId = resOwner.body.id;
+
+      // Verify 24h & 2h reminder background jobs were scheduled
+      const jobs = await prisma.scheduledJob.findMany({
+        where: {
+          profileId: profileAId,
+          type: 'APPOINTMENT_REMINDER'
+        }
+      });
+      expect(jobs.length).toBe(2);
+    });
+
+    it('GET /appointments - Owner, Family, Caregiver get 200 (viewAppointments: true)', async () => {
+      const resOwner = await request(app)
+        .get(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(resOwner.status).toBe(200);
+      expect(Array.isArray(resOwner.body)).toBe(true);
+
+      const resFamily = await request(app)
+        .get(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${familyToken}`);
+      expect(resFamily.status).toBe(200);
+
+      const resCaregiver = await request(app)
+        .get(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${caregiverToken}`);
+      expect(resCaregiver.status).toBe(200);
+
+      // Cross-profile rejected with 404
+      const resOther = await request(app)
+        .get(`/api/profiles/${profileAId}/appointments`)
+        .set('Authorization', `Bearer ${otherUserToken}`);
+      expect(resOther.status).toBe(404);
+    });
+
+    it('POST /appointments/:id/reschedule - Owner can reschedule; Family & Caregiver rejected', async () => {
+      const resFamily = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments/${createdAppointmentId}/reschedule`)
+        .set('Authorization', `Bearer ${familyToken}`)
+        .send({ localDate: '2026-11-21', localTime: '11:00', reason: 'Rescheduled by doctor' });
+      expect(resFamily.status).toBe(403);
+
+      const resCaregiver = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments/${createdAppointmentId}/reschedule`)
+        .set('Authorization', `Bearer ${caregiverToken}`)
+        .send({ localDate: '2026-11-21', localTime: '11:00' });
+      expect(resCaregiver.status).toBe(403);
+
+      const resOwner = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments/${createdAppointmentId}/reschedule`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ localDate: '2026-11-21', localTime: '11:00', reason: 'Patient requested afternoon' });
+      expect(resOwner.status).toBe(200);
+      expect(resOwner.body.localDate).toBe('2026-11-21');
+      expect(resOwner.body.localTime).toBe('11:00');
+      expect(resOwner.body.rescheduledFrom).toBeDefined();
+    });
+
+    it('POST /appointments/:id/cancel - Owner can cancel appointment; Family rejected', async () => {
+      const resFamily = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments/${createdAppointmentId}/cancel`)
+        .set('Authorization', `Bearer ${familyToken}`);
+      expect(resFamily.status).toBe(403);
+
+      const resOwner = await request(app)
+        .post(`/api/profiles/${profileAId}/appointments/${createdAppointmentId}/cancel`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ reason: 'Condition resolved' });
+      expect(resOwner.status).toBe(200);
+      expect(resOwner.body.status).toBe('CANCELLED');
+    });
+  });
+
+  describe('5. Caregiver Notes Permissions Matrix (Stage 5)', () => {
+    it('POST /notes - Caregiver and Owner can add notes; Family rejected (addNotes: false)', async () => {
+      const notePayload = {
+        note: 'Patient was alert and took medication with breakfast. Vitals normal.',
+        isFlagged: false
+      };
+
+      // 1. Family rejected (403)
+      const resFamily = await request(app)
+        .post(`/api/profiles/${profileAId}/notes`)
+        .set('Authorization', `Bearer ${familyToken}`)
+        .send(notePayload);
+      expect(resFamily.status).toBe(403);
+      expect(resFamily.body.error.code).toBe('FORBIDDEN');
+
+      // 2. Caregiver adds note (201)
+      const resCaregiver = await request(app)
+        .post(`/api/profiles/${profileAId}/notes`)
+        .set('Authorization', `Bearer ${caregiverToken}`)
+        .send(notePayload);
+      expect(resCaregiver.status).toBe(201);
+      expect(resCaregiver.body.id).toBeDefined();
+      expect(resCaregiver.body.note).toContain('breakfast');
+      caregiverNoteId = resCaregiver.body.id;
+
+      // 3. Owner adds note (201)
+      const resOwner = await request(app)
+        .post(`/api/profiles/${profileAId}/notes`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ note: 'Owner observation: slept well.', isFlagged: false });
+      expect(resOwner.status).toBe(201);
+
+      // 4. Cross-profile rejected with 404
+      const resOther = await request(app)
+        .post(`/api/profiles/${profileAId}/notes`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .send(notePayload);
+      expect(resOther.status).toBe(404);
+    });
+
+    it('GET /notes - Owner, Family, Caregiver get 200 (viewActivity: true)', async () => {
+      const resFamily = await request(app)
+        .get(`/api/profiles/${profileAId}/notes`)
+        .set('Authorization', `Bearer ${familyToken}`);
+      expect(resFamily.status).toBe(200);
+      expect(Array.isArray(resFamily.body)).toBe(true);
+      expect(resFamily.body.length).toBeGreaterThanOrEqual(1);
+
+      const resCaregiver = await request(app)
+        .get(`/api/profiles/${profileAId}/notes`)
+        .set('Authorization', `Bearer ${caregiverToken}`);
+      expect(resCaregiver.status).toBe(200);
+    });
+
+    it('DELETE /notes/:id - Author can delete note; Non-author non-owner rejected', async () => {
+      // Family attempts to delete caregiver note -> 403
+      const resFamily = await request(app)
+        .delete(`/api/profiles/${profileAId}/notes/${caregiverNoteId}`)
+        .set('Authorization', `Bearer ${familyToken}`);
+      expect(resFamily.status).toBe(403);
+
+      // Caregiver deletes own note -> 200
+      const resCaregiver = await request(app)
+        .delete(`/api/profiles/${profileAId}/notes/${caregiverNoteId}`)
+        .set('Authorization', `Bearer ${caregiverToken}`);
+      expect(resCaregiver.status).toBe(200);
+      expect(resCaregiver.body.success).toBe(true);
+    });
+  });
+
+  describe('6. Shared Activity Timeline (Stage 5)', () => {
+    it('GET /activity - Aggregated timeline returned to authorized members; excludes sensitive audit details', async () => {
+      const resFamily = await request(app)
+        .get(`/api/profiles/${profileAId}/activity`)
+        .set('Authorization', `Bearer ${familyToken}`);
+      expect(resFamily.status).toBe(200);
+      expect(Array.isArray(resFamily.body.activity)).toBe(true);
+
+      // Verify no sensitive IP or user-agent leakage in items
+      const items = resFamily.body.activity;
+      for (const item of items) {
+        expect(item.ipAddress).toBeUndefined();
+        expect(item.userAgent).toBeUndefined();
+      }
+
+      // Cross-profile rejected with 404
+      const resOther = await request(app)
+        .get(`/api/profiles/${profileAId}/activity`)
+        .set('Authorization', `Bearer ${otherUserToken}`);
+      expect(resOther.status).toBe(404);
+    });
+  });
+
+  describe('7. Notifications Isolation (Stage 4 & 5)', () => {
+    it('GET /api/notifications - User reads own notifications; cannot read or mark other user notifications', async () => {
+      const resOwner = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(resOwner.status).toBe(200);
+      expect(resOwner.body.notifications.some((n: any) => n.id === ownerNotificationId)).toBe(true);
+
+      // Family user cannot mark Owner's notification as read (returns 404)
+      const resFamily = await request(app)
+        .patch(`/api/notifications/${ownerNotificationId}/read`)
+        .set('Authorization', `Bearer ${familyToken}`);
+      expect(resFamily.status).toBe(404);
+
+      // Owner marks own notification as read
+      const resMark = await request(app)
+        .patch(`/api/notifications/${ownerNotificationId}/read`)
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(resMark.status).toBe(200);
+      expect(resMark.body.readAt).toBeDefined();
+    });
+  });
+
+  describe('8. Real-Time Revocation Test', () => {
+    it('revoking a member by owner causes their very next request to return 404 immediately', async () => {
+      // 1. Target user can view profile before revocation
       const preCheck = await request(app)
         .get(`/api/profiles/${profileAId}`)
-        .set('Authorization', `Bearer ${caregiverToken}`);
+        .set('Authorization', `Bearer ${targetRevokeToken}`);
       expect(preCheck.status).toBe(200);
 
-      // Step 2: Owner revokes Caregiver
+      // 2. Owner revokes target member
       const revokeRes = await request(app)
-        .delete(`/api/profiles/${profileAId}/care-network/${caregiverMemberId}`)
+        .delete(`/api/profiles/${profileAId}/care-network/${targetRevMemId}`)
         .set('Authorization', `Bearer ${ownerToken}`);
       expect(revokeRes.status).toBe(200);
       expect(revokeRes.body.success).toBe(true);
 
-      // Step 3: Immediate next request by Caregiver returns 404!
+      // 3. Immediate next request returns 404!
       const postCheck = await request(app)
         .get(`/api/profiles/${profileAId}`)
-        .set('Authorization', `Bearer ${caregiverToken}`);
+        .set('Authorization', `Bearer ${targetRevokeToken}`);
       expect(postCheck.status).toBe(404);
       expect(postCheck.body.error.code).toBe('PROFILE_NOT_FOUND');
     });

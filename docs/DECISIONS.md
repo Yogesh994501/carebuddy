@@ -81,5 +81,16 @@ This log records architectural, security, and infrastructure decisions made duri
 - **Decision**: In `jobQueue.ts`, sanitize error strings via `.replace(/[^\x00-\x7F]/g, '->')` prior to persisting to `lastError`.
 - **Rationale**: Guarantees database stability across all operating systems and database character sets without data loss.
 
+### DECISION-016: Appointment Reminders and Rescheduling Lifecycle
+- **Context**: Section 8 requires medical appointments with 24-hour and 2-hour reminders, and historical preservation of previous dates upon rescheduling.
+- **Decision**: Creating an appointment enqueues `APPOINTMENT_REMINDER` jobs at `scheduledAt - 24h` and `scheduledAt - 2h`. Rescheduling cancels previous pending jobs, records `rescheduledFrom`, enqueues new reminder jobs, creates an audit record (`APPOINTMENT_RESCHEDULED`), and sends an in-app `APPOINTMENT_CHANGED` notice to authorized care network members.
+- **Rationale**: Guarantees that care networks never receive stale alerts for superseded appointment times while retaining full audit history.
+
+### DECISION-017: Shared Activity Timeline vs. Owner Audit Log Isolation
+- **Context**: Section 3 and Section 8 specify that authorized family and caregivers see a shared activity timeline (`VIEW_ACTIVITY`), while only the owner sees the full security audit log.
+- **Decision**: Implemented separate endpoints: `/api/profiles/:profileId/activity` returns curated clinical care events (doses, appointments, caregiver notes, member status changes) without IP addresses or user agents; `/api/profiles/:profileId/audit` is strictly restricted via `requireOwner` to the elderly profile owner.
+- **Rationale**: Prevents privacy leaks of sensitive technical details while providing full transparency for daily caregiving activities.
+
+
 
 

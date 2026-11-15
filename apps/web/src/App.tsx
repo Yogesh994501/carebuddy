@@ -7,7 +7,8 @@ import { AssistantChat } from './components/AssistantChat';
 import { SettingsModal } from './components/SettingsModal';
 import { AddMedicationModal, NewMedicationData } from './components/AddMedicationModal';
 import { RolePermissionsModal } from './components/RolePermissionsModal';
-import { ShieldCheck, UserCheck, Users, Stethoscope, Sliders, RefreshCw, Sparkles, Plus, Pill, Lock } from 'lucide-react';
+import { InviteMemberModal, CareMember } from './components/InviteMemberModal';
+import { ShieldCheck, UserCheck, Users, Stethoscope, Sliders, RefreshCw, Sparkles, Plus, Pill, Lock, UserPlus } from 'lucide-react';
 import { useRealTimeSSE } from './hooks/useRealTimeSSE';
 import { useAccessibility } from './hooks/useAccessibility';
 
@@ -17,10 +18,42 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddMedOpen, setIsAddMedOpen] = useState(false);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isResettingDemo, setIsResettingDemo] = useState(false);
   const [demoResetMessage, setDemoResetMessage] = useState<string | null>(null);
   const { settings, updateSetting } = useAccessibility();
   const demoProfileId = 'demo-profile-rose-01';
+
+  const [careMembers, setCareMembers] = useState<CareMember[]>([
+    {
+      id: 'member-1',
+      name: 'Ramesh Patel',
+      role: 'OWNER',
+      relationship: 'Self (Elderly Owner)',
+      email: 'ramesh@demo.carebuddy.local'
+    },
+    {
+      id: 'member-2',
+      name: 'Priya Patel',
+      role: 'FAMILY',
+      relationship: 'Daughter',
+      email: 'priya@demo.carebuddy.local'
+    },
+    {
+      id: 'member-3',
+      name: 'Rahul Patel',
+      role: 'FAMILY',
+      relationship: 'Son',
+      email: 'rahul@demo.carebuddy.local'
+    },
+    {
+      id: 'member-4',
+      name: 'Anita Sharma, RN',
+      role: 'CAREGIVER',
+      relationship: 'Visiting Registered Nurse',
+      email: 'anita@demo.carebuddy.local'
+    }
+  ]);
 
   const handleResetDemo = async () => {
     setIsResettingDemo(true);
@@ -224,6 +257,22 @@ export function App() {
     setTimeout(() => setDemoResetMessage(null), 4000);
   };
 
+  const handleAddMember = (member: CareMember) => {
+    setCareMembers((prev) => [...prev, member]);
+    setActivity((prev) => [
+      {
+        id: `act-${Date.now()}`,
+        type: 'CARE_NETWORK',
+        title: `${member.role === 'FAMILY' ? 'Family Member' : 'Caregiver'} Connected`,
+        description: `${member.name} (${member.relationship}) joined Ramesh Patel's care network.`,
+        timestamp: new Date().toISOString()
+      },
+      ...prev
+    ]);
+    setDemoResetMessage(`Connected ${member.name} (${member.relationship}) to Care Network!`);
+    setTimeout(() => setDemoResetMessage(null), 4000);
+  };
+
   const takenCount = doses.filter((d) => d.status === 'TAKEN').length;
   const adherenceRate = Math.round((takenCount / doses.length) * 100);
 
@@ -375,6 +424,13 @@ export function App() {
             )}
             <button
               type="button"
+              onClick={() => setIsInviteOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold text-xs hover:bg-gray-50 transition-colors flex items-center gap-1"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-[#397B68]" /> Care Network ({careMembers.length})
+            </button>
+            <button
+              type="button"
               onClick={() => setIsPermissionsOpen(true)}
               className="px-2.5 py-1 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold text-xs hover:bg-gray-50 transition-colors flex items-center gap-1"
             >
@@ -470,6 +526,15 @@ export function App() {
         onClose={() => setIsPermissionsOpen(false)}
         activeRole={activeTab}
         onSelectRole={(role) => setActiveTab(role)}
+      />
+
+      {/* Care Network & Invite Member Modal */}
+      <InviteMemberModal
+        isOpen={isInviteOpen}
+        onClose={() => setIsInviteOpen(false)}
+        members={careMembers}
+        onAddMember={handleAddMember}
+        isOwner={activeTab === 'elderly'}
       />
 
       {/* Accessibility & Display Settings Modal */}

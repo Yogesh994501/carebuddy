@@ -1,4 +1,5 @@
-import { ShieldCheck, UserCheck, Users, Stethoscope, Check, X, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { ShieldCheck, UserCheck, Users, Stethoscope, Check, X, Lock, AlertCircle, Info, Sparkles } from 'lucide-react';
 
 export interface RolePermissionsModalProps {
   isOpen: boolean;
@@ -13,72 +14,93 @@ export function RolePermissionsModal({
   activeRole,
   onSelectRole
 }: RolePermissionsModalProps) {
+  const [familyPermissions, setFamilyPermissions] = useState<Record<string, boolean>>({
+    viewMedications: true,
+    recordDoses: false,
+    manageMedications: false,
+    viewAdherence: true,
+    addNotes: false,
+    manageAppointments: false,
+    aiConsent: false,
+    manageNetwork: false
+  });
+
+  const [caregiverPermissions, setCaregiverPermissions] = useState<Record<string, boolean>>({
+    viewMedications: true,
+    recordDoses: true,
+    manageMedications: false,
+    viewAdherence: true,
+    addNotes: true,
+    manageAppointments: true,
+    aiConsent: false,
+    manageNetwork: false
+  });
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
-  const permissionsMatrix = [
+  const isOwner = activeRole === 'elderly';
+
+  const togglePermission = (roleType: 'family' | 'caregiver', permKey: string, permName: string) => {
+    if (!isOwner) {
+      setToastMessage('Only the Elderly Owner (Ramesh Patel) can allot or revoke permissions.');
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    if (roleType === 'family') {
+      const nextVal = !familyPermissions[permKey];
+      setFamilyPermissions((prev) => ({ ...prev, [permKey]: nextVal }));
+      setToastMessage(`${nextVal ? 'Granted' : 'Revoked'} "${permName}" for Family Members.`);
+    } else {
+      const nextVal = !caregiverPermissions[permKey];
+      setCaregiverPermissions((prev) => ({ ...prev, [permKey]: nextVal }));
+      setToastMessage(`${nextVal ? 'Granted' : 'Revoked'} "${permName}" for Caregivers.`);
+    }
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const permissionsList = [
     {
-      name: 'View Medication List & Details',
       key: 'viewMedications',
-      elderly: true,
-      family: true,
-      caregiver: true,
+      name: 'View Medication List & Schedules',
       description: 'See all active prescription names, dosages, and food instructions'
     },
     {
-      name: 'Record / Take Doses',
       key: 'recordDoses',
-      elderly: true,
-      family: false,
-      caregiver: true,
+      name: 'Take / Record Doses',
       description: 'Mark doses as TAKEN, SNOOZED, or SKIPPED with clinical reason'
     },
     {
-      name: 'Manage Medications (Add / Edit / Discontinue)',
       key: 'manageMedications',
-      elderly: true,
-      family: false,
-      caregiver: false,
-      description: 'Prescription authority restricted to Owner or Primary Delegate'
+      name: 'Manage Medications (Add / Edit / Prescribe)',
+      description: 'Add new prescriptions and adjust daily dosage schedules'
     },
     {
-      name: 'View Adherence Analytics & Trends',
       key: 'viewAdherence',
-      elderly: true,
-      family: true,
-      caregiver: true,
-      description: 'View 7-day and 30-day percentage adherence statistics'
+      name: 'View Adherence Analytics & Trends',
+      description: 'Access 7-day and 30-day percentage adherence and missed dose counts'
     },
     {
-      name: 'Add Clinical & Caregiver Shift Notes',
       key: 'addNotes',
-      elderly: true,
-      family: false,
-      caregiver: true,
-      description: 'Record notes, observations, and flag urgent concerns'
+      name: 'Add Clinical & Caregiver Shift Notes',
+      description: 'Record observation logs, shift summaries, and flag vital alerts'
     },
     {
-      name: 'Manage Doctor Appointments',
       key: 'manageAppointments',
-      elderly: true,
-      family: false,
-      caregiver: true,
-      description: 'Schedule, reschedule, or cancel clinical consultations'
+      name: 'Manage Doctor Appointments',
+      description: 'Schedule, reschedule, or cancel consultations with clinicians'
     },
     {
-      name: 'AI Record-Sharing Consent (DPDP Act)',
       key: 'aiConsent',
-      elderly: true,
-      family: false,
-      caregiver: false,
-      description: 'Grant or revoke permission for Sprig Assistant to access medical records'
+      name: 'AI Record Consent (DPDP Act)',
+      description: 'Authorize Sprig AI Assistant to access medical records'
     },
     {
-      name: 'Manage Care Network & Invitations',
       key: 'manageNetwork',
-      elderly: true,
-      family: false,
-      caregiver: false,
-      description: 'Invite new family/caregivers and edit access permissions'
+      name: 'Invite & Manage Care Network',
+      description: 'Generate invitation codes and grant/revoke access for members'
     }
   ];
 
@@ -98,10 +120,10 @@ export function RolePermissionsModal({
             </div>
             <div>
               <h2 id="role-modal-title" className="text-xl font-bold text-[#1E2B28]">
-                Role-Based Permissions Matrix (Gate 5 RBAC)
+                Role Permissions Manager (Gate 5 RBAC)
               </h2>
               <p className="text-xs text-gray-600">
-                HIPAA &amp; DPDP Compliant Access Control for Care Networks
+                Grant or restrict operations for each member in your care circle
               </p>
             </div>
           </div>
@@ -116,127 +138,182 @@ export function RolePermissionsModal({
           </button>
         </div>
 
-        {/* Role Selector Tabs */}
-        <div className="pt-4 pb-2 shrink-0">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
-            Active Role Perspective (Switch to test permissions):
-          </label>
+        {/* Informative Explanation Banner */}
+        <div className="py-3 px-4 my-2 rounded-2xl bg-[#F6F8F5] border border-gray-200 text-xs text-gray-700 space-y-1 shrink-0">
+          <p className="font-bold text-[#1E2B28] flex items-center gap-1.5">
+            <Info className="w-4 h-4 text-[#397B68]" /> Who assigns permissions?
+          </p>
+          <p className="text-[11px] leading-relaxed">
+            By default, CareBuddy initializes clinical safety presets (e.g. family cannot alter prescriptions to prevent accidental overdoses).
+            As the <strong>Elderly Owner (Ramesh Patel)</strong>, you can <strong>click any switch below to grant or revoke</strong> permissions for family and caregivers.
+          </p>
+        </div>
+
+        {/* Feedback Toast */}
+        {toastMessage && (
+          <div className="p-2.5 rounded-xl bg-[#E7F0EC] text-[#397B68] text-xs font-bold border border-[#8DB9A6] flex items-center gap-2 shrink-0 animate-fade-in">
+            <Check className="w-4 h-4" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Role Perspective Switcher */}
+        <div className="pt-2 pb-1 shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Currently Viewing &amp; Editing As:
+            </label>
+            {!isOwner && (
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Read-Only (Switch to Elderly View to edit)
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => onSelectRole('elderly')}
-              className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+              className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col gap-0.5 ${
                 activeRole === 'elderly'
                   ? 'border-[#397B68] bg-[#E7F0EC] text-[#1E2B28] ring-2 ring-[#397B68]'
                   : 'border-gray-200 hover:bg-gray-50 text-gray-600'
               }`}
             >
               <div className="flex items-center gap-1.5 font-bold text-xs text-[#397B68]">
-                <UserCheck className="w-4 h-4" /> Elderly (Owner)
+                <UserCheck className="w-3.5 h-3.5" /> Elderly (Owner)
               </div>
-              <p className="text-[11px] text-gray-500 leading-tight">Ramesh Patel (72yo)</p>
+              <p className="text-[10px] text-gray-500 leading-tight">Ramesh Patel (Sovereign)</p>
             </button>
 
             <button
               type="button"
               onClick={() => onSelectRole('family')}
-              className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+              className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col gap-0.5 ${
                 activeRole === 'family'
                   ? 'border-[#397B68] bg-[#E7F0EC] text-[#1E2B28] ring-2 ring-[#397B68]'
                   : 'border-gray-200 hover:bg-gray-50 text-gray-600'
               }`}
             >
               <div className="flex items-center gap-1.5 font-bold text-xs text-[#397B68]">
-                <Users className="w-4 h-4" /> Family Member
+                <Users className="w-3.5 h-3.5" /> Family Member
               </div>
-              <p className="text-[11px] text-gray-500 leading-tight">Priya Patel (Daughter)</p>
+              <p className="text-[10px] text-gray-500 leading-tight">Priya Patel (Daughter)</p>
             </button>
 
             <button
               type="button"
               onClick={() => onSelectRole('caregiver')}
-              className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+              className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col gap-0.5 ${
                 activeRole === 'caregiver'
                   ? 'border-[#397B68] bg-[#E7F0EC] text-[#1E2B28] ring-2 ring-[#397B68]'
                   : 'border-gray-200 hover:bg-gray-50 text-gray-600'
               }`}
             >
               <div className="flex items-center gap-1.5 font-bold text-xs text-[#397B68]">
-                <Stethoscope className="w-4 h-4" /> Caregiver Nurse
+                <Stethoscope className="w-3.5 h-3.5" /> Caregiver Nurse
               </div>
-              <p className="text-[11px] text-gray-500 leading-tight">Anita Sharma, RN</p>
+              <p className="text-[10px] text-gray-500 leading-tight">Anita Sharma, RN</p>
             </button>
           </div>
         </div>
 
-        {/* Matrix Table */}
-        <div className="overflow-y-auto flex-1 py-3 pr-1">
+        {/* Matrix Table with Interactive Toggles */}
+        <div className="overflow-y-auto flex-1 py-2 pr-1">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 font-bold">
-                <th className="py-2.5 pr-2">Operation / Capability</th>
-                <th className="py-2.5 px-2 text-center">Elderly Owner</th>
-                <th className="py-2.5 px-2 text-center">Family</th>
-                <th className="py-2.5 px-2 text-center">Caregiver</th>
+              <tr className="border-b border-gray-200 text-gray-500 font-bold sticky top-0 bg-white z-10">
+                <th className="py-2 pr-2">Permission / Operation</th>
+                <th className="py-2 px-2 text-center">Elderly Owner</th>
+                <th className="py-2 px-2 text-center">Family (Priya)</th>
+                <th className="py-2 px-2 text-center">Caregiver (Anita)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {permissionsMatrix.map((item) => (
-                <tr key={item.key} className="hover:bg-gray-50">
-                  <td className="py-3 pr-2">
-                    <p className="font-bold text-[#1E2B28]">{item.name}</p>
-                    <p className="text-[11px] text-gray-500">{item.description}</p>
-                  </td>
-                  <td className="py-3 px-2 text-center">
-                    {item.elderly ? (
-                      <span className="inline-flex p-1 bg-green-100 text-green-700 rounded-full">
-                        <Check className="w-3.5 h-3.5" />
+              {permissionsList.map((item) => {
+                const familyAllowed = familyPermissions[item.key] ?? false;
+                const caregiverAllowed = caregiverPermissions[item.key] ?? false;
+
+                return (
+                  <tr key={item.key} className="hover:bg-gray-50 transition-colors">
+                    <td className="py-3 pr-2">
+                      <p className="font-bold text-[#1E2B28]">{item.name}</p>
+                      <p className="text-[11px] text-gray-500">{item.description}</p>
+                    </td>
+
+                    {/* Owner Column: Always has all sovereign permissions */}
+                    <td className="py-3 px-2 text-center">
+                      <span className="inline-flex items-center justify-center w-7 h-7 bg-emerald-100 text-emerald-700 rounded-full" title="Owner Sovereignty">
+                        <Check className="w-4 h-4" />
                       </span>
-                    ) : (
-                      <span className="inline-flex p-1 bg-gray-100 text-gray-400 rounded-full">
-                        <X className="w-3.5 h-3.5" />
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-2 text-center">
-                    {item.family ? (
-                      <span className="inline-flex p-1 bg-green-100 text-green-700 rounded-full">
-                        <Check className="w-3.5 h-3.5" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex p-1 bg-amber-100 text-amber-700 rounded-full" title="Restricted for Family">
-                        <Lock className="w-3.5 h-3.5" />
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-2 text-center">
-                    {item.caregiver ? (
-                      <span className="inline-flex p-1 bg-green-100 text-green-700 rounded-full">
-                        <Check className="w-3.5 h-3.5" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex p-1 bg-amber-100 text-amber-700 rounded-full" title="Restricted for Caregiver">
-                        <Lock className="w-3.5 h-3.5" />
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    {/* Family Column: Interactive Toggle */}
+                    <td className="py-3 px-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => togglePermission('family', item.key, item.name)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ${
+                          familyAllowed
+                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                        } ${!isOwner ? 'cursor-not-allowed opacity-80' : 'cursor-pointer shadow-xs'}`}
+                        title={isOwner ? `Click to ${familyAllowed ? 'revoke' : 'grant'} for Family` : 'Owner only'}
+                      >
+                        {familyAllowed ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-700" /> Allowed
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3 h-3 text-amber-700" /> Locked
+                          </>
+                        )}
+                      </button>
+                    </td>
+
+                    {/* Caregiver Column: Interactive Toggle */}
+                    <td className="py-3 px-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => togglePermission('caregiver', item.key, item.name)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ${
+                          caregiverAllowed
+                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                        } ${!isOwner ? 'cursor-not-allowed opacity-80' : 'cursor-pointer shadow-xs'}`}
+                        title={isOwner ? `Click to ${caregiverAllowed ? 'revoke' : 'grant'} for Caregiver` : 'Owner only'}
+                      >
+                        {caregiverAllowed ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-700" /> Allowed
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3 h-3 text-amber-700" /> Locked
+                          </>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-gray-100 shrink-0 flex items-center justify-between">
+        <div className="pt-3 border-t border-gray-100 shrink-0 flex items-center justify-between">
           <p className="text-xs text-gray-500">
-            Current view active: <strong>{activeRole.toUpperCase()}</strong>
+            {isOwner
+              ? '💡 Tip: Click any "Allowed" or "Locked" badge to toggle permissions in real time.'
+              : 'Switch to Elderly View to allot or revoke permissions.'}
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-[#397B68] text-white font-bold text-xs hover:bg-[#2b6051] transition-all shadow-sm"
+            className="px-6 py-2 rounded-xl bg-[#397B68] text-white font-bold text-xs hover:bg-[#2b6051] transition-all shadow-sm"
           >
-            Done
+            Save &amp; Close
           </button>
         </div>
       </div>

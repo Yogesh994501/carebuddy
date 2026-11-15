@@ -22,7 +22,10 @@ export function App() {
     setIsResettingDemo(true);
     setDemoResetMessage(null);
     try {
-      const res = await fetch('/api/demo/reset', { method: 'POST' });
+      const res = await fetch('/api/demo/reset', {
+        method: 'POST',
+        headers: { 'x-carebuddy-request': '1' }
+      });
       if (res.ok) {
         setDemoResetMessage('Demo data reset successfully!');
         setTimeout(() => setDemoResetMessage(null), 4000);

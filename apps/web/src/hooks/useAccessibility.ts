@@ -76,7 +76,10 @@ export function useAccessibility() {
     // Sync to backend settings API in background
     fetch('/api/settings', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-carebuddy-request': '1'
+      },
       body: JSON.stringify({ [key]: value })
     }).catch(() => {});
   };

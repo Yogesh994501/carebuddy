@@ -69,7 +69,10 @@ export function AssistantChat({
     try {
       const res = await fetch(`/api/profiles/${profileId}/assistant/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-carebuddy-request': '1'
+        },
         body: JSON.stringify({ message: text })
       });
 
@@ -113,7 +116,10 @@ export function AssistantChat({
     try {
       const res = await fetch(`/api/profiles/${profileId}/assistant/consent`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-carebuddy-request': '1'
+        },
         body: JSON.stringify({ granted: target })
       });
       if (res.ok) {

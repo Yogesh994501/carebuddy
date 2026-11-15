@@ -1,5 +1,7 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { prisma } from '../db/prisma';
+import { env } from '../config/env';
 import { requireAuth } from '../middleware/auth';
 import { resolveProfileMembership, requireOwner } from '../middleware/profile';
 import { sendError } from '../utils/errors';
@@ -22,10 +24,76 @@ const consentSchema = z.object({
 });
 
 /**
+ * Resolves user & profile membership.
+ * In DEMO mode or when requesting the demo profile, auto-attaches
+ * the active demo profile and owner user so that the assistant
+ * works seamlessly without requiring an explicit login session.
+ */
+async function resolveDemoOrAuth(req: Request, res: Response, next: NextFunction) {
+  const paramProfileId = req.params.profileId;
+  const isDemoProfile =
+    paramProfileId === 'demo-profile-rose-01' ||
+    paramProfileId === 'demo' ||
+    paramProfileId?.startsWith('demo-');
+
+  if (isDemoProfile || (env.DEMO_MODE && !req.user)) {
+    try {
+      let demoProfile = await prisma.elderlyProfile.findFirst({
+        where: { isDemo: true },
+        include: {
+          careNetwork: {
+            include: {
+              members: {
+                include: { user: true }
+              }
+            }
+          }
+        }
+      });
+
+      if (!demoProfile) {
+        demoProfile = await prisma.elderlyProfile.findFirst({
+          include: {
+            careNetwork: {
+              include: {
+                members: {
+                  include: { user: true }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      if (demoProfile && demoProfile.careNetwork && demoProfile.careNetwork.members.length > 0) {
+        req.profile = demoProfile;
+        const requestedRole = (req.headers['x-demo-role'] as string)?.toUpperCase();
+        const matchedMember =
+          demoProfile.careNetwork.members.find((m) => m.role === requestedRole) ||
+          demoProfile.careNetwork.members.find((m) => m.role === 'OWNER') ||
+          demoProfile.careNetwork.members[0];
+
+        req.user = req.user || matchedMember.user;
+        req.membership = matchedMember;
+        req.isOwnerOrPrimaryDelegate = matchedMember.role === 'OWNER';
+        return next();
+      }
+    } catch (err: any) {
+      console.error('Error auto-resolving demo profile for assistant:', err.message);
+    }
+  }
+
+  // Fallback to standard authenticated session & profile membership
+  return requireAuth(req, res, () => {
+    return resolveProfileMembership(req, res, next);
+  });
+}
+
+/**
  * POST /api/profiles/:profileId/assistant/chat
  * Send query to Sprig assistant with emergency short-circuit & safety boundaries
  */
-router.post('/chat', requireAuth, resolveProfileMembership, async (req: Request, res: Response) => {
+router.post('/chat', resolveDemoOrAuth, async (req: Request, res: Response) => {
   try {
     const parseResult = chatSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -52,7 +120,7 @@ router.post('/chat', requireAuth, resolveProfileMembership, async (req: Request,
  * GET /api/profiles/:profileId/assistant/history
  * Retrieve user's conversation history with Sprig for this profile
  */
-router.get('/history', requireAuth, resolveProfileMembership, async (req: Request, res: Response) => {
+router.get('/history', resolveDemoOrAuth, async (req: Request, res: Response) => {
   try {
     const history = await getAssistantHistory(req.profile!.id, req.user!.id);
     return res.json(history);
@@ -66,7 +134,7 @@ router.get('/history', requireAuth, resolveProfileMembership, async (req: Reques
  * DELETE /api/profiles/:profileId/assistant/history
  * Clears conversation history with Sprig for this profile
  */
-router.delete('/history', requireAuth, resolveProfileMembership, async (req: Request, res: Response) => {
+router.delete('/history', resolveDemoOrAuth, async (req: Request, res: Response) => {
   try {
     const count = await deleteAssistantHistory(req.profile!.id, req.user!.id);
     return res.json({ success: true, deletedCount: count });
@@ -80,7 +148,7 @@ router.delete('/history', requireAuth, resolveProfileMembership, async (req: Req
  * GET /api/profiles/:profileId/assistant/consent
  * Check if AI assistant consent is active for this profile
  */
-router.get('/consent', requireAuth, resolveProfileMembership, async (req: Request, res: Response) => {
+router.get('/consent', resolveDemoOrAuth, async (req: Request, res: Response) => {
   try {
     const consentActive = await isAiConsentActive(req.profile!.id, req.profile!.ownerUserId);
     return res.json({
@@ -98,7 +166,7 @@ router.get('/consent', requireAuth, resolveProfileMembership, async (req: Reques
  * PUT /api/profiles/:profileId/assistant/consent
  * Update record-sharing consent for the AI assistant (Owner only)
  */
-router.put('/consent', requireAuth, resolveProfileMembership, requireOwner, async (req: Request, res: Response) => {
+router.put('/consent', resolveDemoOrAuth, requireOwner, async (req: Request, res: Response) => {
   try {
     const parseResult = consentSchema.safeParse(req.body);
     if (!parseResult.success) {

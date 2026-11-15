@@ -95,7 +95,7 @@ export async function callGeminiAssistant(
   context: AssistantContext
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
-  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
   // If live API key is present and not dummy, call GoogleGenAI
   if (apiKey && apiKey !== 'dummy_test_key' && !process.env.VITEST) {

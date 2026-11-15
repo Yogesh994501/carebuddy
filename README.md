@@ -41,9 +41,14 @@ CareBuddy is structured as a TypeScript monorepo using npm workspaces:
      ```bash
      npm run db:local
      ```
-4. Verify database migration:
+4. Verify stages:
    ```bash
-   npm run verify:stage1
+   npm run verify:stage1      # Stage 1 database migration & append-only triggers
+   npm run verify:stage2      # Stage 2 auth & Gate 5 permission matrix
+   npm run verify:stage3      # Stage 3 dose engine, timezones & state machine
+   npm run verify:assistant   # Section 12a Sprig identity & accessibility
+   npm run typecheck          # Monorepo TypeScript check
+   npm run build              # Full monorepo production build
    ```
 
 ---

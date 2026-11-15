@@ -10,9 +10,13 @@
     "dev:api": "npm --workspace=@carebuddy/api run dev",
     "dev:web": "npm --workspace=@carebuddy/web run dev",
     "worker": "npm --workspace=@carebuddy/api run worker",
+    "build": "npm --workspace=@carebuddy/api run build && npm --workspace=@carebuddy/web run build",
+    "typecheck": "npx --workspace=@carebuddy/shared tsc --noEmit && npx --workspace=@carebuddy/api tsc --noEmit && npx --workspace=@carebuddy/web tsc --noEmit",
     "db:local": "node scripts/run-pg.js",
     "verify:stage1": "node scripts/verify-migration.js",
+    "verify:stage2": "node scripts/verify-stage2.js",
     "verify:stage3": "node scripts/verify-stage3.js",
+    "verify:assistant": "node scripts/verify-assistant-mark.js",
     "prisma:generate": "npm --workspace=@carebuddy/api run prisma:generate",
     "prisma:migrate": "npm --workspace=@carebuddy/api run prisma:migrate",
     "test": "npm --workspace=@carebuddy/api run test"

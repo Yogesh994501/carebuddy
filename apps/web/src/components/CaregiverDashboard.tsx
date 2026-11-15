@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AssistantMark } from './AssistantMark';
-import { Pill, CheckCircle2, Calendar, FileText, Flag, Send } from 'lucide-react';
+import { Pill, CheckCircle2, Calendar, FileText, Flag, Send, Plus } from 'lucide-react';
 
 export interface CaregiverDoseItem {
   id: string;
@@ -25,6 +25,7 @@ export interface CaregiverDashboardProps {
   onRecordDose: (doseId: string, state: 'TAKEN' | 'SNOOZED' | 'SKIPPED', reason?: string) => Promise<void>;
   onCreateNote: (note: string, isFlagged: boolean) => Promise<void>;
   onRescheduleAppointment?: (id: string, date: string, time: string) => Promise<void>;
+  onOpenAddMedication?: () => void;
   isRealTimeConnected?: boolean;
 }
 
@@ -35,6 +36,7 @@ export function CaregiverDashboard({
   onRecordDose,
   onCreateNote,
   onRescheduleAppointment,
+  onOpenAddMedication,
   isRealTimeConnected = true
 }: CaregiverDashboardProps) {
   const [newNote, setNewNote] = useState('');
@@ -96,7 +98,18 @@ export function CaregiverDashboard({
               <h3 className="font-bold text-lg text-[#1E2B28] flex items-center gap-2">
                 <Pill className="w-5 h-5 text-[#397B68]" /> Dose Administration
               </h3>
-              <span className="text-xs text-gray-500">{doses.length} total today</span>
+              <div className="flex items-center gap-2">
+                {onOpenAddMedication && (
+                  <button
+                    type="button"
+                    onClick={onOpenAddMedication}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-semibold hover:bg-gray-50 flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Medication
+                  </button>
+                )}
+                <span className="text-xs text-gray-500">{doses.length} total today</span>
+              </div>
             </div>
 
             {doses.length === 0 ? (

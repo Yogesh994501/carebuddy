@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AssistantMark } from './AssistantMark';
-import { CheckCircle2, Clock, Calendar, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Calendar, AlertCircle, Plus, Pill } from 'lucide-react';
 
 export interface DoseItem {
   id: string;
@@ -28,6 +28,7 @@ export interface ElderlyDashboardProps {
   onTakeDose: (doseId: string) => Promise<void>;
   onSnoozeDose: (doseId: string) => Promise<void>;
   onSkipDose: (doseId: string, reason: string) => Promise<void>;
+  onOpenAddMedication?: () => void;
   isRealTimeConnected?: boolean;
 }
 
@@ -38,6 +39,7 @@ export function ElderlyDashboard({
   onTakeDose,
   onSnoozeDose,
   onSkipDose,
+  onOpenAddMedication,
   isRealTimeConnected = true
 }: ElderlyDashboardProps) {
   const [skipDialogOpen, setSkipDialogOpen] = useState<string | null>(null);
@@ -97,9 +99,20 @@ export function ElderlyDashboard({
 
       {/* Due / Upcoming Medications */}
       <section className="space-y-4">
-        <h3 className="text-xl font-bold text-[#1E2B28] flex items-center gap-2">
-          <Clock className="w-6 h-6 text-[#397B68]" /> Today's Medications
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold text-[#1E2B28] flex items-center gap-2">
+            <Clock className="w-6 h-6 text-[#397B68]" /> Today's Medications
+          </h3>
+          {onOpenAddMedication && (
+            <button
+              type="button"
+              onClick={onOpenAddMedication}
+              className="px-4 py-2 rounded-xl bg-[#397B68] text-white font-bold text-xs hover:bg-[#2b6051] transition-all flex items-center gap-1.5 shadow-sm focus:ring-4 focus:ring-[#8DB9A6]"
+            >
+              <Plus className="w-4 h-4" /> Add Medication
+            </button>
+          )}
+        </div>
 
         {pendingDoses.length === 0 ? (
           <div className="bg-[#E7F0EC] p-6 rounded-2xl border border-[#8DB9A6] text-center space-y-2">

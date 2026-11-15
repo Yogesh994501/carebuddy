@@ -4,3 +4,5 @@ export * from './FamilyDashboard';
 export * from './CaregiverDashboard';
 export * from './AssistantChat';
 export * from './SettingsModal';
+export * from './AddMedicationModal';
+export * from './RolePermissionsModal';

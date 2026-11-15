@@ -96,6 +96,18 @@ This log records architectural, security, and infrastructure decisions made duri
 - **Decision**: The Server-Sent Events stream (`GET /api/profiles/:profileId/events`) broadcasts strictly opaque change signals containing only `{ type, profileId, entityId }`. Upon receiving an event, the frontend client invalidates relevant TanStack Query keys to refetch fresh data via authenticated REST endpoints. Furthermore, when care network membership is revoked or removed, the user's active SSE connection is immediately closed (`res.end()`).
 - **Rationale**: Completely eliminates health data leakage across event proxies or stream logs while maintaining sub-second multi-dashboard synchronization.
 
+### DECISION-019: Multi-Layered AI Safety Pipeline & Context Permission Boundary
+- **Context**: Section 10 and Section 16 (Gate 9) require integrating Gemini (`@google/genai`) with the original Sprig persona, enforcing zero medical diagnosis, zero unprescribed dose changes, prompt injection quarantine, consent-gating, and acute emergency short-circuiting.
+- **Decision**: Implemented an explicit 6-stage server-side safety pipeline:
+  1. **Emergency Short-Circuit**: Deterministic pattern matching fires *before* invoking LLM; acute emergencies (chest pain, stroke, breathing emergency, severe bleeding, overdose, suicide) immediately short-circuit to return fixed 911/emergency guidance and dispatch an in-app notice to the care network.
+  2. **Consent Gating**: Owner must enable `aiConsent` (stored in `ConsentRecord`). When disabled, health records are omitted and Sprig only answers general app navigation questions.
+  3. **Permission-Scoped Context**: Context builder reads caller's verified `CareNetworkMember` permission flags (`viewMedications`, `viewAppointments`, `viewAdherence`, `viewActivity`) to selectively include records; strips contact info, addresses, and audit logs; uses patient first name only.
+  4. **Structural Delimiters**: User-entered strings (notes, instructions, doctor names) are quarantined in `<<<UNTRUSTED_PATIENT_DATA>>>` delimiters with delimiter escapes neutralized.
+  5. **Pre-Safety Interception**: Deterministic pattern matcher catches adversarial prescribing, dose changing, diagnosis, or jailbreak attacks.
+  6. **Output Validation & Labeling**: Model responses are checked for clinical diagnosis or dose alterations, replaced with safe medical fallback if violated, and labeled as either `'From your CareBuddy records'` or `'General information'`.
+- **Rationale**: As specified in Section 10, LLM behavior cannot be mathematically guaranteed by prompt engineering alone; multi-layered deterministic boundary checks guarantee compliance and safety even under adversarial jailbreak attempts.
+
+
 
 
 

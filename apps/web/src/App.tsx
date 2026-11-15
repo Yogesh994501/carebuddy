@@ -3,11 +3,13 @@ import { AssistantMark } from './components/AssistantMark';
 import { ElderlyDashboard, DoseItem } from './components/ElderlyDashboard';
 import { FamilyDashboard } from './components/FamilyDashboard';
 import { CaregiverDashboard, CaregiverDoseItem } from './components/CaregiverDashboard';
+import { AssistantChat } from './components/AssistantChat';
 import { ShieldCheck, UserCheck, Users, Stethoscope } from 'lucide-react';
 import { useRealTimeSSE } from './hooks/useRealTimeSSE';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'elderly' | 'family' | 'caregiver'>('elderly');
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const demoProfileId = 'demo-profile-rose-01';
 
   // Real-time SSE hook (listens to /api/profiles/:profileId/events and refetches via REST)
@@ -244,6 +246,26 @@ export function App() {
           />
         )}
       </main>
+
+      {/* Floating Sprig Assistant Button (56px) */}
+      <button
+        type="button"
+        onClick={() => setIsChatOpen(true)}
+        aria-label="Open Sprig Care Assistant"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#397B68] text-white shadow-xl hover:bg-[#2e6253] hover:scale-105 active:scale-95 transition-all flex items-center justify-center z-40 focus:outline-none focus:ring-4 focus:ring-[#8DB9A6]"
+      >
+        <AssistantMark state="idle" size={38} />
+      </button>
+
+      {/* Sprig Assistant Chat Drawer */}
+      <AssistantChat
+        profileId={demoProfileId}
+        elderlyFirstName="Martha"
+        isOwner={activeTab === 'elderly'}
+        initialConsentGranted={true}
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+      />
 
       {/* Footer */}
       <footer className="bg-white border-t border-[#D1DCD6] py-3 px-6 text-center text-xs text-gray-500">

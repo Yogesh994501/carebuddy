@@ -106,4 +106,10 @@ PostgreSQL triggers (`check_medication_log_immutable()` and `check_audit_log_imm
   - Client-side auto-reconnection with TanStack Query invalidation and 30s polling fallback (`useRealTimeSSE.ts`).
   - Active streams terminated immediately upon caregiver revocation.
   - Gate 7 verified: 3 simultaneous browser sessions synchronized in 353ms (< 2.0s SLA), 7/7 tests passing.
-- **Stage 7 (AI CareBuddy Assistant: Sprig)**: Next stage.
+- **Stage 7 (AI CareBuddy Assistant: Sprig)**: Complete ✅
+  - Server-side integration with Gemini via `@google/genai` and original Sprig persona.
+  - Multi-layer boundary safety pipeline: deterministic emergency short-circuit, DPDP AI consent gating (`ConsentRecord`), caller permission context isolation (`viewMedications`, `viewAppointments`, etc.), and structural delimiter defense (`<<<UNTRUSTED_PATIENT_DATA>>>`).
+  - Output validation: replaces diagnoses and dose-change phrasing with safe medical disclaimers; labels outputs as 'From your CareBuddy records' or 'General information'.
+  - Accessible drawer chat interface (`AssistantChat.tsx`) with floating mobile trigger, persistent disclaimer, quick suggestions, and history clearing.
+  - Gate 9 verified: 48/48 tests passing, including a 30-prompt red-team adversarial evaluation suite with 0 violations.
+- **Stage 8 (Accessibility, Responsive Design & Polish)**: Next stage.

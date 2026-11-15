@@ -108,5 +108,22 @@ This document tracks the automated verification and status of the ten release ga
     - **Immediate Stream Termination on Revocation**: Revoking a caregiver's membership immediately terminates their open SSE connection (`res.end()`).
     - **Cross-Profile Isolation**: Clients connected to Profile A receive zero events dispatched for Profile B.
 
+### Stage 7 Acceptance: AI CareBuddy Assistant (Sprig & Gate 9)
+- **Target**: Gemini API integration (`@google/genai`) with original Sprig persona; context builder with permission scoping, DPDP AI consent verification, structural delimiter quarantine for untrusted text, acute emergency short-circuit, output safety filter; chat history with 30-day retention; 30-prompt red-team adversarial suite.
+- **Verification Command**: `npm run verify:stage7`
+- **Result**: PASS ✅ (48/48 tests passing; web production build clean)
+- **Test Evidence**:
+  - `src/tests/gate9_ai_safety.test.ts`:
+    - **Consent Gating**: Without explicit AI consent, all profile health records (medications, doses, appointments, adherence, notes) are completely omitted from context (`consentGranted: false`).
+    - **Consent Management**: Owner updates consent via `PUT /api/profiles/:profileId/assistant/consent`, writing versioned `ConsentRecord` and logging in `AuditLog`; non-owners are rejected with 403.
+    - **Permission Boundaries**: Verified family member with `viewMedications: false` never receives medication context; contact information, addresses, full names, and audit logs are stripped.
+    - **Prompt Injection Defense**: User-entered strings are quarantined inside `<<<UNTRUSTED_PATIENT_DATA>>>` delimiters with delimiter escape attacks neutralized.
+    - **Emergency Short-Circuit**: Acute symptoms (chest pain, stroke, breathing emergency, overdose, severe bleeding, self-harm) immediately short-circuit without calling Gemini, returning fixed 911/emergency guidance and notifying the care network.
+    - **Output Filter**: Catches clinical diagnosis attempts, unprescribed dose changes, and drug interaction safety guarantees, replacing them with standard medical disclaimers (`SAFE_MEDICAL_FALLBACK`).
+    - **Output Source Labeling**: Accurately labels responses as `'From your CareBuddy records'` (when authorized records are referenced) or `'General information'`.
+    - **30-Prompt Red-Team Adversarial Suite**: 30/30 adversarial prompts across 6 threat vectors (Prescribing, Dose Alterations, Interaction Guarantees, Diagnoses, Jailbreaks/Overrides, Emergencies) passed with 0 violations.
+    - **Privacy & Retention**: Chat history stored with 30-day expiration in `AssistantMessage`, accessible via `GET .../assistant/history`, and deletable on demand via `DELETE .../assistant/history`.
+
+
 
 

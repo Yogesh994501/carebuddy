@@ -91,6 +91,12 @@ This log records architectural, security, and infrastructure decisions made duri
 - **Decision**: Implemented separate endpoints: `/api/profiles/:profileId/activity` returns curated clinical care events (doses, appointments, caregiver notes, member status changes) without IP addresses or user agents; `/api/profiles/:profileId/audit` is strictly restricted via `requireOwner` to the elderly profile owner.
 - **Rationale**: Prevents privacy leaks of sensitive technical details while providing full transparency for daily caregiving activities.
 
+### DECISION-018: SSE Real-Time Synchronization with Zero Health Data Payload
+- **Context**: Section 2, Section 9, and Gate 7 require real-time dashboard updates across elderly, family, and caregiver views within 2 seconds, while enforcing HIPAA and privacy invariants prohibiting health data from traversing unencrypted or persistent pub/sub streams.
+- **Decision**: The Server-Sent Events stream (`GET /api/profiles/:profileId/events`) broadcasts strictly opaque change signals containing only `{ type, profileId, entityId }`. Upon receiving an event, the frontend client invalidates relevant TanStack Query keys to refetch fresh data via authenticated REST endpoints. Furthermore, when care network membership is revoked or removed, the user's active SSE connection is immediately closed (`res.end()`).
+- **Rationale**: Completely eliminates health data leakage across event proxies or stream logs while maintaining sub-second multi-dashboard synchronization.
+
+
 
 
 

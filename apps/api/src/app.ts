@@ -16,6 +16,7 @@ import notificationRoutes from './routes/notifications';
 import appointmentRoutes from './routes/appointments';
 import noteRoutes from './routes/notes';
 import activityRoutes from './routes/activity';
+import eventRoutes from './routes/events';
 
 const app = express();
 
@@ -96,6 +97,7 @@ app.use('/api/profiles/:profileId/adherence', doseRoutes);
 app.use('/api/profiles/:profileId/appointments', appointmentRoutes);
 app.use('/api/profiles/:profileId/notes', noteRoutes);
 app.use('/api/profiles/:profileId/activity', activityRoutes);
+app.use('/api/profiles/:profileId/events', eventRoutes);
 app.use('/api/invitations', invitationRoutes);
 
 // Catch-all 404 for unknown API routes

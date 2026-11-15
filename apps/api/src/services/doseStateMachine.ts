@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma';
 import { DoseStatus, DoseActionSource, MedicationDose } from '@prisma/client';
 import { DateTime } from 'luxon';
+import { sseService } from './sseService';
 
 export interface TransitionDoseInput {
   doseId: string;
@@ -241,6 +242,13 @@ export async function transitionDose(input: TransitionDoseInput): Promise<Transi
 
     const result = await tx.medicationDose.findUnique({ where: { id: doseId } });
     return result!;
+  });
+
+  // Broadcast real-time SSE event (carrying ONLY type, profileId, entityId - never health data)
+  sseService.broadcastEvent({
+    type: 'DOSE_UPDATED',
+    profileId: updatedDose.profileId,
+    entityId: updatedDose.id
   });
 
   // Store in idempotency store

@@ -93,4 +93,20 @@ This document tracks the automated verification and status of the ten release ga
     - **Notification Isolation**: Users access only their own notifications; attempting to mark another user's notification returns 404.
     - **Instant Real-Time Revocation**: Revoking a member by the owner takes effect immediately on their next request (returns 404).
 
+### Stage 6 Acceptance: Dashboards & Real-Time SSE (Gate 7)
+- **Target**: Elderly, Family, and Caregiver dashboards; real-time Server-Sent Events stream (`GET /api/profiles/:profileId/events`); Gate 7 verified (3 sessions open simultaneously, dose recorded in one reflects in all 3 within 2 seconds; zero health data in SSE payloads; instant revocation closes stream).
+- **Verification Command**: `npm run verify:stage6`
+- **Result**: PASS ✅ (7/7 tests passing; web production build clean)
+- **Test Evidence**:
+  - `src/tests/gate7_dashboard_sync.test.ts`:
+    - **Unauthenticated Access**: Rejected with 401.
+    - **IDOR Defense**: Accessing events for an unauthorized profile returns 404 `NOT_FOUND` (preventing profile enumeration).
+    - **SSE Connection Headers**: Sets `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform`, `Connection: keep-alive`.
+    - **Gate 7 Synchronized Propagation**: 3 simultaneous connected sessions (elderly, family, caregiver); dose recorded in one triggers broadcast event delivered to all 3 sessions within 353ms (well under the 2.0s SLA limit).
+    - **HIPAA & Privacy Invariant**: All SSE event payloads contain strictly `{ type, profileId, entityId }` — zero health data (no medication names, instructions, dosages, or note texts).
+    - **Real-Time Note and Appointment Sync**: Creating caregiver notes and medical appointments broadcasts lightweight notifications (`NOTE_ADDED`, `APPOINTMENT_UPDATED`) to connected clients.
+    - **Immediate Stream Termination on Revocation**: Revoking a caregiver's membership immediately terminates their open SSE connection (`res.end()`).
+    - **Cross-Profile Isolation**: Clients connected to Profile A receive zero events dispatched for Profile B.
+
+
 

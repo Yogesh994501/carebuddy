@@ -7,6 +7,7 @@ import { generateRandomCode, hashInvitationCode } from '../utils/crypto';
 import { sendError } from '../utils/errors';
 import { invitationAcceptLimiter } from '../middleware/rateLimit';
 import { FamilyDefaultPermissions, CaregiverDefaultPermissions } from '@carebuddy/shared';
+import { sseService } from '../services/sseService';
 
 const router = Router({ mergeParams: true });
 
@@ -321,6 +322,14 @@ router.delete('/care-network/:memberId', requireAuth, resolveProfileMembership, 
           userAgent: req.headers['user-agent']
         }
       });
+    });
+
+    // Section 3: Open SSE streams for that profile are closed immediately on revocation
+    sseService.closeConnectionsForUser(member.userId, req.profile!.id);
+    sseService.broadcastEvent({
+      type: 'CARE_NETWORK_UPDATED',
+      profileId: req.profile!.id,
+      entityId: memberId
     });
 
     return res.json({ success: true, message: 'Member access revoked immediately.' });

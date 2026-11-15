@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { resolveProfileMembership, requirePermission } from '../middleware/profile';
 import { sendError } from '../utils/errors';
 import { sendNotification } from '../services/notificationService';
+import { sseService } from '../services/sseService';
 
 const router = Router({ mergeParams: true });
 
@@ -100,6 +101,12 @@ router.post('/', requireAuth, resolveProfileMembership, requirePermission('addNo
       });
     }
 
+    sseService.broadcastEvent({
+      type: 'NOTE_ADDED',
+      profileId: req.profile!.id,
+      entityId: note.id
+    });
+
     res.status(201).json(note);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
@@ -142,6 +149,12 @@ router.delete('/:id', requireAuth, resolveProfileMembership, async (req: Request
         entityType: 'CaregiverNote',
         entityId: existing.id
       }
+    });
+
+    sseService.broadcastEvent({
+      type: 'NOTE_ADDED',
+      profileId: req.profile!.id,
+      entityId: existing.id
     });
 
     res.json({ success: true, message: 'Note deleted' });

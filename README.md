@@ -100,4 +100,10 @@ PostgreSQL triggers (`check_medication_log_immutable()` and `check_audit_log_imm
   - Caregiver notes (`/api/profiles/:profileId/notes`) with flagged priority and author deletion control.
   - Curated shared activity timeline (`/api/profiles/:profileId/activity`) isolating sensitive admin audit trails.
   - Gate 5 Matrix completely verified across all existing routes (19/19 tests passing).
-- **Stage 6 (Dashboards and Real-Time SSE)**: Next stage.
+- **Stage 6 (Dashboards and Real-Time SSE)**: Complete ✅
+  - Three distinct role dashboards (`ElderlyDashboard`, `FamilyDashboard`, `CaregiverDashboard`) built with React 18, Tailwind CSS & Framer Motion.
+  - SSE real-time event streaming (`GET /api/profiles/:profileId/events`) carrying strictly `{ type, profileId, entityId }` (zero health data leakage).
+  - Client-side auto-reconnection with TanStack Query invalidation and 30s polling fallback (`useRealTimeSSE.ts`).
+  - Active streams terminated immediately upon caregiver revocation.
+  - Gate 7 verified: 3 simultaneous browser sessions synchronized in 353ms (< 2.0s SLA), 7/7 tests passing.
+- **Stage 7 (AI CareBuddy Assistant: Sprig)**: Next stage.

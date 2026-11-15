@@ -7,6 +7,7 @@ import { sendError } from '../utils/errors';
 import { resolveWallClockInstant } from '../services/doseGenerator';
 import { enqueueJob } from '../services/jobQueue';
 import { sendNotification } from '../services/notificationService';
+import { sseService } from '../services/sseService';
 
 const router = Router({ mergeParams: true });
 
@@ -177,6 +178,12 @@ router.post('/', requireAuth, resolveProfileMembership, requirePermission('manag
       }
     });
 
+    sseService.broadcastEvent({
+      type: 'APPOINTMENT_UPDATED',
+      profileId: req.profile!.id,
+      entityId: appointment.id
+    });
+
     res.status(201).json(appointment);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
@@ -301,6 +308,12 @@ router.post('/:id/reschedule', requireAuth, resolveProfileMembership, requirePer
       });
     }
 
+    sseService.broadcastEvent({
+      type: 'APPOINTMENT_UPDATED',
+      profileId: req.profile!.id,
+      entityId: updated.id
+    });
+
     res.json(updated);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
@@ -365,6 +378,12 @@ router.post('/:id/cancel', requireAuth, resolveProfileMembership, requirePermiss
       });
     }
 
+    sseService.broadcastEvent({
+      type: 'APPOINTMENT_UPDATED',
+      profileId: req.profile!.id,
+      entityId: updated.id
+    });
+
     res.json(updated);
   } catch (err: any) {
     sendError(res, 500, 'INTERNAL_ERROR', err.message);
@@ -401,6 +420,12 @@ router.post('/:id/complete', requireAuth, resolveProfileMembership, requirePermi
         entityType: 'Appointment',
         entityId: updated.id
       }
+    });
+
+    sseService.broadcastEvent({
+      type: 'APPOINTMENT_UPDATED',
+      profileId: req.profile!.id,
+      entityId: updated.id
     });
 
     res.json(updated);

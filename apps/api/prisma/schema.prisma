@@ -1,0 +1,515 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum NetworkRole {
+  OWNER
+  FAMILY
+  CAREGIVER
+}
+
+enum OwnerMode {
+  DIRECT
+  ASSISTED
+}
+
+enum MemberStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+  LOCKED
+}
+
+enum DoseStatus {
+  PENDING
+  SNOOZED
+  TAKEN
+  SKIPPED
+  MISSED
+}
+
+enum DoseActionSource {
+  OWNER_APP
+  CAREGIVER_APP
+  CAREGIVER_ASSISTED
+  CORRECTION
+  SYSTEM_WORKER
+}
+
+enum MedicationStatus {
+  ACTIVE
+  PAUSED
+  DISCONTINUED
+  COMPLETED
+}
+
+enum ScheduleFrequency {
+  ONCE_DAILY
+  TWICE_DAILY
+  THREE_TIMES_DAILY
+  CUSTOM_TIMES
+  SELECTED_WEEKDAYS
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  DOSE_UPCOMING
+  DOSE_MISSED
+  APPOINTMENT_UPCOMING
+  APPOINTMENT_CHANGED
+  MEDICATION_CHANGED
+  INVITATION_ACCEPTED
+  ACCESS_REVOKED
+  PERMISSIONS_CHANGED
+  CAREGIVER_ACTIVITY
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD
+  EXPIRED
+}
+
+enum JobType {
+  GENERATE_DOSES
+  DOSE_UPCOMING
+  DOSE_MISSED_CHECK
+  APPOINTMENT_REMINDER
+}
+
+model User {
+  id                      String                  @id @default(uuid())
+  email                   String                  @unique
+  passwordHash            String
+  name                    String
+  createdAt               DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                @updatedAt @db.Timestamptz(6)
+
+  sessions                Session[]
+  recoveryCodes           RecoveryCode[]
+  consentRecords          ConsentRecord[]
+  careNetworkMemberships  CareNetworkMember[]
+  caregiverNotes          CaregiverNote[]
+  auditLogs               AuditLog[]
+  userSettings            UserSettings?
+  notificationPreferences NotificationPreference[]
+  assistantMessages       AssistantMessage[]
+}
+
+model Session {
+  id         String   @id // Opaque random session token
+  userId     String
+  expiresAt  DateTime @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model RecoveryCode {
+  id         String    @id @default(uuid())
+  userId     String
+  codeHash   String
+  usedAt     DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ConsentRecord {
+  id         String    @id @default(uuid())
+  userId     String
+  purpose    String
+  version    String
+  granted    Boolean
+  grantedAt  DateTime  @default(now()) @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+  ipAddress  String?
+  userAgent  String?
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+}
+
+model ElderlyProfile {
+  id                    String            @id @default(uuid())
+  ownerUserId           String?
+  name                  String
+  preferredName         String?
+  dateOfBirth           DateTime?         @db.Date
+  bloodGroup            String?
+  allergies             String?
+  emergencyNotes        String?
+  timezone              String            @default("Asia/Kolkata")
+  ownerMode             OwnerMode         @default(DIRECT)
+  reminderLeadMinutes   Int               @default(15) // Range: 5 to 60
+  overdueGraceMinutes   Int               @default(60) // Range: 15 to 180
+  snoozeDurationMinutes Int               @default(10)
+  maxSnoozeCount        Int               @default(3)
+  aiConsent             Boolean           @default(false)
+  isDemo                Boolean           @default(false)
+  createdAt             DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime          @updatedAt @db.Timestamptz(6)
+
+  careNetwork           CareNetwork?
+  medications           Medication[]
+  doses                 MedicationDose[]
+  appointments          Appointment[]
+  caregiverNotes        CaregiverNote[]
+  notifications         Notification[]
+  notificationPreferences NotificationPreference[]
+  scheduledJobs         ScheduledJob[]
+  auditLogs             AuditLog[]
+  assistantMessages     AssistantMessage[]
+  medicationLogs        MedicationLog[]
+
+  @@index([ownerUserId])
+}
+
+model CareNetwork {
+  id          String              @id @default(uuid())
+  profileId   String              @unique
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
+
+  profile     ElderlyProfile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  members     CareNetworkMember[]
+  invitations Invitation[]
+}
+
+model CareNetworkMember {
+  id                 String       @id @default(uuid())
+  careNetworkId      String
+  userId             String
+  role               NetworkRole
+  status             MemberStatus @default(ACTIVE)
+  relationshipLabel  String?
+  isPrimaryDelegate  Boolean      @default(false)
+
+  // Permissions
+  viewMedications    Boolean      @default(true)
+  viewAdherence      Boolean      @default(true)
+  viewAppointments   Boolean      @default(true)
+  viewActivity       Boolean      @default(true)
+  recordDoses        Boolean      @default(false)
+  addNotes           Boolean      @default(false)
+  manageMedications  Boolean      @default(false)
+  manageAppointments Boolean      @default(false)
+  actOnBehalf        Boolean      @default(false)
+
+  lastActivityAt     DateTime?    @db.Timestamptz(6)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(6)
+
+  careNetwork        CareNetwork  @relation(fields: [careNetworkId], references: [id], onDelete: Cascade)
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([careNetworkId, userId])
+  @@index([userId, status])
+}
+
+model Invitation {
+  id                 String           @id @default(uuid())
+  careNetworkId      String
+  role               NetworkRole
+  relationshipLabel  String?
+  codeHash           String
+  permissionPreset   Json?
+  expiresAt          DateTime         @db.Timestamptz(6)
+  attempts           Int              @default(0)
+  maxAttempts        Int              @default(5)
+  status             InvitationStatus @default(PENDING)
+  createdById        String
+  acceptedByUserId   String?
+  acceptedAt         DateTime?        @db.Timestamptz(6)
+  revokedAt          DateTime?        @db.Timestamptz(6)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(6)
+
+  careNetwork        CareNetwork      @relation(fields: [careNetworkId], references: [id], onDelete: Cascade)
+
+  @@index([codeHash, status])
+  @@index([careNetworkId, status])
+}
+
+model Medication {
+  id                         String             @id @default(uuid())
+  profileId                  String
+  name                       String
+  genericName                String?
+  strength                   String
+  dosage                     String
+  medicineType               String
+  prescriptionDetails        String?
+  prescriber                 String?
+  instructions               String?
+  foodInstructions           String?
+  refillQuantity             Int?
+  refillReminderThreshold    Int?
+  currentPillsRemaining      Int?
+  startDate                  DateTime           @db.Date
+  endDate                    DateTime?          @db.Date
+  status                     MedicationStatus   @default(ACTIVE)
+  confirmedPrescriptionSource Boolean           @default(true)
+  deletedAt                  DateTime?          @db.Timestamptz(6)
+  createdAt                  DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime           @updatedAt @db.Timestamptz(6)
+
+  profile                    ElderlyProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  schedules                  MedicationSchedule[]
+  doses                      MedicationDose[]
+  logs                       MedicationLog[]
+
+  @@index([profileId, status])
+}
+
+model MedicationSchedule {
+  id             String             @id @default(uuid())
+  medicationId   String
+  version        Int                @default(1)
+  frequency      ScheduleFrequency
+  timesOfDay     String[]           // Wall-clock ["08:00", "20:00"]
+  weekdays       Int[]              // 1 (Monday) to 7 (Sunday)
+  effectiveFrom  DateTime           @default(now()) @db.Timestamptz(6)
+  effectiveTo    DateTime?          @db.Timestamptz(6)
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
+
+  medication     Medication         @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  doses          MedicationDose[]
+
+  @@index([medicationId, isActive])
+}
+
+model MedicationDose {
+  id                 String            @id @default(uuid())
+  profileId          String
+  medicationId       String
+  scheduleId         String
+  localDate          String            // "YYYY-MM-DD"
+  localTime          String            // "HH:MM"
+  scheduledAt        DateTime          @db.Timestamptz(6)
+  timezone           String
+  status             DoseStatus        @default(PENDING)
+  version            Int               @default(1)
+  snoozeCount        Int               @default(0)
+  snoozedUntil       DateTime?         @db.Timestamptz(6)
+  takenAt            DateTime?         @db.Timestamptz(6)
+  confirmedByUserId  String?
+  actionSource       DoseActionSource?
+  actedOnBehalf      Boolean           @default(false)
+  skipReason         String?
+  correctionReason   String?
+  voidedAt           DateTime?         @db.Timestamptz(6)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(6)
+
+  profile            ElderlyProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  medication         Medication         @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  schedule           MedicationSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  logs               MedicationLog[]
+
+  @@unique([scheduleId, localDate, localTime])
+  @@index([profileId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@index([profileId, status, scheduledAt])
+}
+
+model MedicationLog {
+  id               String            @id @default(uuid())
+  doseId           String
+  medicationId     String
+  profileId        String
+  actorUserId      String
+  action           DoseStatus
+  actionSource     DoseActionSource
+  actedOnBehalf    Boolean           @default(false)
+  reason           String?
+  previousState    DoseStatus?
+  newState         DoseStatus
+  timestamp        DateTime          @default(now()) @db.Timestamptz(6)
+
+  dose             MedicationDose    @relation(fields: [doseId], references: [id], onDelete: Cascade)
+  medication       Medication        @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  profile          ElderlyProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([doseId, timestamp])
+  @@index([profileId, timestamp])
+}
+
+model Appointment {
+  id               String            @id @default(uuid())
+  profileId        String
+  doctor           String
+  specialty        String?
+  clinic           String
+  scheduledAt      DateTime          @db.Timestamptz(6)
+  localDate        String            // "YYYY-MM-DD"
+  localTime        String            // "HH:MM"
+  address          String?
+  contact          String?
+  reason           String?
+  notes            String?
+  status           AppointmentStatus @default(SCHEDULED)
+  rescheduledFrom  DateTime?         @db.Timestamptz(6)
+  createdById      String
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+
+  profile          ElderlyProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, scheduledAt])
+  @@index([profileId, status])
+}
+
+model CaregiverNote {
+  id            String         @id @default(uuid())
+  profileId     String
+  authorUserId  String
+  note          String
+  isFlagged     Boolean        @default(false)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
+
+  profile       ElderlyProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  author        User           @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt])
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  profileId      String
+  recipientId    String
+  type           NotificationType
+  title          String
+  message        String
+  entityId       String?
+  idempotencyKey String           @unique
+  displayedAt    DateTime?        @db.Timestamptz(6)
+  readAt         DateTime?        @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+
+  profile        ElderlyProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([profileId, createdAt])
+}
+
+model NotificationPreference {
+  id         String           @id @default(uuid())
+  userId     String
+  profileId  String
+  type       NotificationType
+  enabled    Boolean          @default(true)
+  createdAt  DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime         @updatedAt @db.Timestamptz(6)
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile    ElderlyProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profileId, type])
+}
+
+model ScheduledJob {
+  id             String    @id @default(uuid())
+  profileId      String?
+  type           JobType
+  idempotencyKey String    @unique
+  runAt          DateTime  @db.Timestamptz(6)
+  status         JobStatus @default(QUEUED)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  lockedBy       String?
+  lockedUntil    DateTime? @db.Timestamptz(6)
+  lastError      String?
+  payload        Json?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+
+  profile        ElderlyProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([profileId, runAt])
+}
+
+model WorkerHeartbeat {
+  id            String   @id @default(uuid())
+  workerId      String   @unique
+  lastHeartbeat DateTime @default(now()) @db.Timestamptz(6)
+  status        String   @default("HEALTHY")
+  startedAt     DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AuditLog {
+  id         String          @id @default(uuid())
+  profileId  String?
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime        @default(now()) @db.Timestamptz(6)
+
+  profile    ElderlyProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([profileId, timestamp])
+  @@index([userId, timestamp])
+  @@index([action, timestamp])
+}
+
+model UserSettings {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  textSize      String   @default("100") // "100", "125", "150", "200"
+  elderlyMode   Boolean  @default(false)
+  highContrast  Boolean  @default(false)
+  reducedMotion Boolean  @default(false)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AssistantMessage {
+  id          String         @id @default(uuid())
+  profileId   String
+  userId      String
+  role        String         // "user" | "model" | "system"
+  content     String
+  sourceLabel String?        // "From your CareBuddy records" | "General information"
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+  expiresAt   DateTime       @db.Timestamptz(6)
+
+  profile     ElderlyProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, userId, createdAt])
+  @@index([expiresAt])
+}
